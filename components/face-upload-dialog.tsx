@@ -43,15 +43,41 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
     if (!selectedFile) return
 
     setIsAnalyzing(true)
-    // Simulate analysis
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsAnalyzing(false)
+    
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedFile)
 
-    // Show success and close
-    setTimeout(() => {
-      handleRemoveFile()
-      onOpenChange(false)
-    }, 1000)
+      const response = await fetch('http://localhost:8000/analyze-skin', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.statusText}`)
+      }
+
+      const analysisResult = await response.json()
+      
+      // Store analysis results in localStorage for other components to use
+      localStorage.setItem('skinAnalysis', JSON.stringify(analysisResult))
+      
+      // Show success and close
+      setTimeout(() => {
+        handleRemoveFile()
+        onOpenChange(false)
+        // Trigger a custom event to notify other components
+        window.dispatchEvent(new CustomEvent('skinAnalysisComplete', { 
+          detail: analysisResult 
+        }))
+      }, 1000)
+      
+    } catch (error) {
+      console.error('Analysis error:', error)
+      alert('Analysis failed. Please try again or check if the backend server is running.')
+    } finally {
+      setIsAnalyzing(false)
+    }
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { ProductGrid } from "@/components/product-grid"
 import { ProductFilters } from "@/components/product-filters"
 import { Header } from "@/components/header"
@@ -101,8 +101,74 @@ const sampleProducts: Product[] = [
 ]
 
 export function ProductsPage() {
-  const [products] = useState<Product[]>(sampleProducts)
+  const [products, setProducts] = useState<Product[]>(sampleProducts)
   const [filteredProducts, setFilteredProducts] = useState<Product[]>(sampleProducts)
+  const [hasAnalysis, setHasAnalysis] = useState(false)
+
+  useEffect(() => {
+    // Check if there's analysis data available
+    const storedAnalysis = localStorage.getItem('skinAnalysis')
+    if (storedAnalysis) {
+      try {
+        const analysisData = JSON.parse(storedAnalysis)
+        if (analysisData.recommended_products && analysisData.recommended_products.length > 0) {
+          // Convert recommended products to Product format
+          const recommendedProducts: Product[] = analysisData.recommended_products.map((product: any, index: number) => ({
+            id: `rec-${index}`,
+            name: product.name,
+            brand: product.brand,
+            price: product.price,
+            type: product.type,
+            image: product.image,
+            rating: product.rating,
+            description: product.description
+          }))
+          
+          // Combine with sample products, prioritizing recommended ones
+          const combinedProducts = [...recommendedProducts, ...sampleProducts.filter(sp => 
+            !recommendedProducts.some(rp => rp.name === sp.name)
+          )]
+          
+          setProducts(combinedProducts)
+          setFilteredProducts(combinedProducts)
+          setHasAnalysis(true)
+        }
+      } catch (error) {
+        console.error('Error parsing stored analysis:', error)
+      }
+    }
+
+    // Listen for new analysis results
+    const handleAnalysisComplete = (event: CustomEvent) => {
+      const analysisData = event.detail
+      if (analysisData.recommended_products && analysisData.recommended_products.length > 0) {
+        const recommendedProducts: Product[] = analysisData.recommended_products.map((product: any, index: number) => ({
+          id: `rec-${index}`,
+          name: product.name,
+          brand: product.brand,
+          price: product.price,
+          type: product.type,
+          image: product.image,
+          rating: product.rating,
+          description: product.description
+        }))
+        
+        const combinedProducts = [...recommendedProducts, ...sampleProducts.filter(sp => 
+          !recommendedProducts.some(rp => rp.name === sp.name)
+        )]
+        
+        setProducts(combinedProducts)
+        setFilteredProducts(combinedProducts)
+        setHasAnalysis(true)
+      }
+    }
+
+    window.addEventListener('skinAnalysisComplete', handleAnalysisComplete as EventListener)
+    
+    return () => {
+      window.removeEventListener('skinAnalysisComplete', handleAnalysisComplete as EventListener)
+    }
+  }, [])
 
   const handleFilterChange = useCallback(
     (filters: {

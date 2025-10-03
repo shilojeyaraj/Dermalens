@@ -4,10 +4,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Sun, Moon, Clock, Droplets, Sparkles, Shield } from "lucide-react"
+import { useState, useEffect } from "react"
 
 interface SkincareRoutineDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+interface AnalysisResult {
+  detected_conditions: string[]
+  recommended_products: any[]
+  skincare_routine: {
+    morning_routine: any[]
+    evening_routine: any[]
+    total_products: number
+    estimated_cost: number
+    generated_at: string
+  }
 }
 
 // Mock data representing backend-generated routine
@@ -90,6 +103,45 @@ const eveningRoutine = [
 ]
 
 export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDialogProps) {
+  const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    // Load analysis data from localStorage
+    const storedAnalysis = localStorage.getItem('skinAnalysis')
+    if (storedAnalysis) {
+      try {
+        const parsed = JSON.parse(storedAnalysis)
+        setAnalysisData(parsed)
+      } catch (error) {
+        console.error('Error parsing stored analysis:', error)
+      }
+    }
+
+    // Listen for new analysis results
+    const handleAnalysisComplete = (event: CustomEvent) => {
+      setAnalysisData(event.detail)
+    }
+
+    window.addEventListener('skinAnalysisComplete', handleAnalysisComplete as EventListener)
+    
+    return () => {
+      window.removeEventListener('skinAnalysisComplete', handleAnalysisComplete as EventListener)
+    }
+  }, [])
+
+  // Use real data if available, otherwise fall back to mock data
+  const routineData = analysisData?.skincare_routine || {
+    morning_routine: morningRoutine,
+    evening_routine: eveningRoutine,
+    total_products: 8,
+    estimated_cost: 150.00,
+    generated_at: new Date().toISOString()
+  }
+
+  const detectedConditions = analysisData?.detected_conditions || ["Combination Skin", "Mild Acne", "Sensitive", "Dehydrated"]
+  const recommendedProducts = analysisData?.recommended_products || []
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
@@ -98,7 +150,9 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
             <Sparkles className="w-6 h-6 text-primary" />
             Your Personalized Skincare Routine
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">Generated based on your skin analysis • Last updated: Today</p>
+          <p className="text-sm text-muted-foreground">
+            Generated based on your skin analysis • Last updated: {analysisData ? new Date(routineData.generated_at).toLocaleDateString() : 'Today'}
+          </p>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
@@ -106,14 +160,15 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
           <div className="bg-muted/50 rounded-lg p-4">
             <h3 className="font-semibold mb-2">Skin Analysis Summary</h3>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">Combination Skin</Badge>
-              <Badge variant="secondary">Mild Acne</Badge>
-              <Badge variant="secondary">Sensitive</Badge>
-              <Badge variant="secondary">Dehydrated</Badge>
+              {detectedConditions.map((condition, index) => (
+                <Badge key={index} variant="secondary">
+                  {condition.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </Badge>
+              ))}
             </div>
             <p className="text-sm text-muted-foreground mt-3">
-              Your routine focuses on gentle hydration, acne treatment, and sun protection while maintaining your skin
-              barrier.
+              Your routine focuses on addressing {detectedConditions.length > 0 ? detectedConditions.join(', ') : 'your skin concerns'} 
+              with {routineData.total_products} recommended products (estimated cost: ${routineData.estimated_cost.toFixed(2)}).
             </p>
           </div>
 
@@ -128,8 +183,8 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
               </Badge>
             </div>
             <div className="space-y-4">
-              {morningRoutine.map((item) => {
-                const Icon = item.icon
+              {routineData.morning_routine.map((item) => {
+                const Icon = item.icon || Droplets
                 return (
                   <div
                     key={item.step}
@@ -172,8 +227,8 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
               </Badge>
             </div>
             <div className="space-y-4">
-              {eveningRoutine.map((item) => {
-                const Icon = item.icon
+              {routineData.evening_routine.map((item) => {
+                const Icon = item.icon || Moon
                 return (
                   <div
                     key={item.step}
