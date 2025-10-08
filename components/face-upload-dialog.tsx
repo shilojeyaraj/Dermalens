@@ -2,11 +2,11 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Camera, Upload, X, CheckCircle2 } from "lucide-react"
+import { Camera, Upload, X, CheckCircle2, Video, CameraOff } from "lucide-react"
 
 interface FaceUploadDialogProps {
   open: boolean
@@ -17,7 +17,11 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [stream, setStream] = useState<MediaStream | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -38,6 +42,68 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
       fileInputRef.current.value = ""
     }
   }
+
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
+      })
+      setStream(mediaStream)
+      setIsCameraOpen(true)
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error)
+      alert('Unable to access camera. Please check permissions or try uploading a file instead.')
+    }
+  }
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      setStream(null)
+    }
+    setIsCameraOpen(false)
+  }
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const canvas = canvasRef.current
+      const video = videoRef.current
+      const context = canvas.getContext('2d')
+      
+      if (context) {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        context.drawImage(video, 0, 0)
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' })
+            setSelectedFile(file)
+            const url = URL.createObjectURL(blob)
+            setPreviewUrl(url)
+            stopCamera()
+          }
+        }, 'image/jpeg', 0.8)
+      }
+    }
+  }
+
+  // Cleanup camera stream when dialog closes
+  useEffect(() => {
+    if (!open) {
+      stopCamera()
+    }
+    return () => {
+      stopCamera()
+    }
+  }, [open])
 
   const handleAnalyze = async () => {
     if (!selectedFile) return
@@ -84,29 +150,32 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-balance">Upload Face Photo or Video</DialogTitle>
+          <DialogTitle className="text-balance">Face Scan & Analysis</DialogTitle>
           <DialogDescription className="text-pretty">
-            Upload a clear photo or video of your face for personalized skincare analysis
+            Take a photo with your camera or upload an image for personalized skincare analysis
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {!previewUrl ? (
+          {!previewUrl && !isCameraOpen ? (
             <div className="space-y-4">
-              <div
-                className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Camera className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Click to upload</p>
-                    <p className="text-xs text-muted-foreground">or drag and drop</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, MP4 or MOV (max. 10MB)</p>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col items-center gap-2 bg-transparent"
+                  onClick={startCamera}
+                >
+                  <Video className="w-6 h-6 text-primary" />
+                  <span className="text-sm font-medium">Take Photo</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col items-center gap-2 bg-transparent"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-6 h-6 text-primary" />
+                  <span className="text-sm font-medium">Upload File</span>
+                </Button>
               </div>
 
               <input
@@ -117,16 +186,47 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
                 className="hidden"
               />
 
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">PNG, JPG, MP4 or MOV (max. 10MB)</p>
+              </div>
+            </div>
+          ) : isCameraOpen ? (
+            <div className="space-y-4">
+              <div className="relative rounded-lg overflow-hidden bg-black">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-64 object-cover"
+                />
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute top-2 right-2 rounded-full w-8 h-8"
+                  onClick={stopCamera}
+                >
+                  <CameraOff className="w-4 h-4" />
+                </Button>
+              </div>
+              
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  className="flex-1 bg-transparent"
-                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1"
+                  onClick={stopCamera}
                 >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Choose File
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={capturePhoto}
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Capture Photo
                 </Button>
               </div>
+              
+              <canvas ref={canvasRef} className="hidden" />
             </div>
           ) : (
             <div className="space-y-4">
