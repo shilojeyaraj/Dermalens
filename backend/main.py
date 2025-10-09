@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -16,12 +16,17 @@ from typing import List, Dict, Any
 import json
 from datetime import datetime
 
+# Import our custom modules
+from config import ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG
+from database import db_manager, UserProfileCreate, UserProfileUpdate, SkinProfileCreate, SkinProfileUpdate, UserImageCreate
+from auth import auth_manager, get_current_user, get_current_user_id, SignUpRequest, SignInRequest, PasswordResetRequest, TokenResponse
+
 app = FastAPI(title="Dermalens Skin Analysis API", version="1.0.0")
 
 # CORS middleware for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js dev server
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -162,6 +167,53 @@ def classify_skin_conditions(face_regions: List[np.ndarray]) -> List[Dict[str, A
         results.append(face_result)
     
     return results
+
+def enhance_product_recommendations(products: List[Dict[str, Any]], user_skin_profile: Dict, detected_conditions: List[str]) -> List[Dict[str, Any]]:
+    """Enhance product recommendations based on user's skin profile"""
+    if not user_skin_profile:
+        return products
+    
+    enhanced_products = []
+    
+    for product in products:
+        # Add personalized scoring based on user profile
+        personalized_score = 0
+        
+        # Consider skin type compatibility
+        skin_type = user_skin_profile.get("skin_type")
+        if skin_type == "dry" and "moisturizer" in product["type"].lower():
+            personalized_score += 2
+        elif skin_type == "oily" and "cleanser" in product["type"].lower():
+            personalized_score += 2
+        elif skin_type == "sensitive" and "gentle" in product["description"].lower():
+            personalized_score += 3
+        
+        # Consider allergies
+        allergies = user_skin_profile.get("allergies", [])
+        product_safe = True
+        for allergy in allergies:
+            if allergy.lower() in product["description"].lower():
+                product_safe = False
+                break
+        
+        if not product_safe:
+            continue
+        
+        # Consider sensitivity level
+        sensitivity = user_skin_profile.get("sensitivity_level")
+        if sensitivity == "high" and "fragrance-free" in product["description"].lower():
+            personalized_score += 2
+        elif sensitivity == "high" and any(ingredient in product["description"].lower() for ingredient in ["fragrance", "parfum", "alcohol"]):
+            personalized_score -= 2
+        
+        # Add personalized score to product
+        enhanced_product = product.copy()
+        enhanced_product["personalized_score"] = product["rating"] + (personalized_score * 0.1)
+        enhanced_products.append(enhanced_product)
+    
+    # Sort by personalized score
+    enhanced_products.sort(key=lambda x: x["personalized_score"], reverse=True)
+    return enhanced_products
 
 def search_products(conditions: List[str]) -> List[Dict[str, Any]]:
     """Search for skincare products using Google Store API (mock implementation)"""
@@ -355,9 +407,252 @@ async def root():
 async def health_check():
     return {"status": "healthy", "models_loaded": skin_model is not None}
 
+# Authentication Endpoints
+@app.post("/auth/signup", response_model=TokenResponse)
+async def signup(request: SignUpRequest):
+    """Sign up a new user"""
+    try:
+        # Create user in Supabase Auth
+        auth_result = await auth_manager.sign_up(request.email, request.password)
+        
+        if not auth_result["success"]:
+            raise HTTPException(status_code=400, detail=auth_result["error"])
+        
+        user = auth_result["user"]
+        
+        # Create user profile in database
+        profile_result = await db_manager.create_profile(
+            user_id=user.id,
+            email=request.email,
+            username=request.username
+        )
+        
+        if not profile_result["success"]:
+            raise HTTPException(status_code=500, detail="Failed to create user profile")
+        
+        return TokenResponse(
+            access_token=auth_result["session"].access_token,
+            user=user
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
+
+@app.post("/auth/signin", response_model=TokenResponse)
+async def signin(request: SignInRequest):
+    """Sign in an existing user"""
+    try:
+        result = await auth_manager.sign_in(request.email, request.password)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=401, detail=result["error"])
+        
+        return TokenResponse(
+            access_token=result["access_token"],
+            user=result["user"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Signin failed: {str(e)}")
+
+@app.post("/auth/signout")
+async def signout(current_user: Dict = Depends(get_current_user)):
+    """Sign out current user"""
+    try:
+        # Note: In a real implementation, you'd need to handle token blacklisting
+        return {"message": "Signed out successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Signout failed: {str(e)}")
+
+@app.post("/auth/reset-password")
+async def reset_password(request: PasswordResetRequest):
+    """Send password reset email"""
+    try:
+        result = await auth_manager.reset_password(request.email)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        
+        return {"message": "Password reset email sent"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password reset failed: {str(e)}")
+
+@app.get("/auth/me")
+async def get_current_user_info(current_user: Dict = Depends(get_current_user)):
+    """Get current user information"""
+    try:
+        # Get user profile from database
+        profile_result = await db_manager.get_profile(current_user.id)
+        
+        if not profile_result["success"]:
+            raise HTTPException(status_code=404, detail="User profile not found")
+        
+        return {
+            "user": current_user,
+            "profile": profile_result["data"]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get user info: {str(e)}")
+
+# User Profile Management Endpoints
+@app.put("/profile")
+async def update_profile(
+    profile_update: UserProfileUpdate,
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user profile"""
+    try:
+        result = await db_manager.update_profile(current_user_id, profile_update.dict(exclude_unset=True))
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"message": "Profile updated successfully", "profile": result["data"]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
+@app.get("/profile")
+async def get_profile(current_user_id: str = Depends(get_current_user_id)):
+    """Get user profile"""
+    try:
+        result = await db_manager.get_profile(current_user_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        
+        return result["data"]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get profile: {str(e)}")
+
+# Skin Profile Management Endpoints
+@app.post("/skin-profile")
+async def create_skin_profile(
+    skin_profile: SkinProfileCreate,
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Create or update user skin profile"""
+    try:
+        # Check if skin profile already exists
+        existing_result = await db_manager.get_skin_profile(current_user_id)
+        
+        if existing_result["success"] and existing_result["data"]:
+            # Update existing profile
+            result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True))
+        else:
+            # Create new profile
+            result = await db_manager.create_skin_profile(current_user_id, skin_profile.dict())
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"message": "Skin profile saved successfully", "skin_profile": result["data"]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save skin profile: {str(e)}")
+
+@app.get("/skin-profile")
+async def get_skin_profile(current_user_id: str = Depends(get_current_user_id)):
+    """Get user skin profile"""
+    try:
+        result = await db_manager.get_skin_profile(current_user_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail="Skin profile not found")
+        
+        return result["data"]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get skin profile: {str(e)}")
+
+@app.put("/skin-profile")
+async def update_skin_profile(
+    skin_profile: SkinProfileUpdate,
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Update user skin profile"""
+    try:
+        result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True))
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"message": "Skin profile updated successfully", "skin_profile": result["data"]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update skin profile: {str(e)}")
+
+# User Images Management
+@app.get("/images")
+async def get_user_images(current_user_id: str = Depends(get_current_user_id)):
+    """Get all user images"""
+    try:
+        result = await db_manager.get_user_images(current_user_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"images": result["data"]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get images: {str(e)}")
+
+@app.delete("/images/{image_id}")
+async def delete_user_image(image_id: str, current_user_id: str = Depends(get_current_user_id)):
+    """Delete user image"""
+    try:
+        # Verify image belongs to user
+        images_result = await db_manager.get_user_images(current_user_id)
+        if not images_result["success"]:
+            raise HTTPException(status_code=500, detail="Failed to verify image ownership")
+        
+        user_images = images_result["data"]
+        image_exists = any(img["id"] == image_id for img in user_images)
+        
+        if not image_exists:
+            raise HTTPException(status_code=404, detail="Image not found or access denied")
+        
+        result = await db_manager.delete_user_image(image_id)
+        
+        if not result["success"]:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        return {"message": "Image deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete image: {str(e)}")
+
 @app.post("/analyze-skin")
-async def analyze_skin(file: UploadFile = File(...)):
-    """Analyze skin conditions from uploaded image or video"""
+async def analyze_skin(
+    file: UploadFile = File(...),
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Analyze skin conditions from uploaded image or video (requires authentication)"""
     try:
         # Read file content
         content = await file.read()
@@ -420,23 +715,44 @@ async def analyze_skin(file: UploadFile = File(...)):
         # Search for products
         products = search_products(unique_conditions)
         
+        # Get user's skin profile for enhanced recommendations
+        skin_profile_result = await db_manager.get_skin_profile(current_user_id)
+        user_skin_profile = skin_profile_result["data"] if skin_profile_result["success"] else None
+        
+        # Enhance product recommendations based on user's skin profile
+        enhanced_products = enhance_product_recommendations(products, user_skin_profile, unique_conditions)
+        
         # Generate skincare routine
-        routine = generate_skincare_routine(unique_conditions, products)
+        routine = generate_skincare_routine(unique_conditions, enhanced_products)
+        
+        # Save analysis results to database (you might want to create a skin_analyses table)
+        analysis_data = {
+            "user_id": current_user_id,
+            "detected_conditions": unique_conditions,
+            "analysis_results": all_results,
+            "recommended_products": enhanced_products,
+            "skincare_routine": routine,
+            "analysis_timestamp": datetime.now().isoformat()
+        }
         
         return {
             "analysis_results": all_results,
             "detected_conditions": unique_conditions,
-            "recommended_products": products,
+            "recommended_products": enhanced_products,
             "skincare_routine": routine,
-            "analysis_timestamp": datetime.now().isoformat()
+            "analysis_timestamp": datetime.now().isoformat(),
+            "user_skin_profile": user_skin_profile
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.post("/search-products")
-async def search_products_endpoint(conditions: List[str]):
-    """Search for products based on skin conditions"""
+async def search_products_endpoint(
+    conditions: List[str],
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Search for products based on skin conditions (requires authentication)"""
     try:
         products = search_products(conditions)
         return {"products": products, "conditions_searched": conditions}
@@ -444,8 +760,11 @@ async def search_products_endpoint(conditions: List[str]):
         raise HTTPException(status_code=500, detail=f"Product search failed: {str(e)}")
 
 @app.post("/generate-routine")
-async def generate_routine_endpoint(request: Dict[str, Any]):
-    """Generate skincare routine based on conditions and products"""
+async def generate_routine_endpoint(
+    request: Dict[str, Any],
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Generate skincare routine based on conditions and products (requires authentication)"""
     try:
         conditions = request.get("conditions", [])
         products = request.get("products", [])
@@ -456,4 +775,4 @@ async def generate_routine_endpoint(request: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Routine generation failed: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=API_HOST, port=API_PORT)

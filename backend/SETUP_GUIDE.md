@@ -14,9 +14,15 @@ Create a file named `.env` in the `backend` folder with this content:
 ```env
 # Dermalens Backend Environment Variables
 
-# Google Store API (optional - currently using mock data)
-GOOGLE_STORE_API_KEY=your_api_key_here
-GOOGLE_STORE_API_URL=https://www.googleapis.com/books/v1/volumes
+# Supabase Configuration
+SUPABASE_URL=https://ezlevlxkxanlceofykrh.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NzYxNTksImV4cCI6MjA3NTM1MjE1OX0.oPovEwcfN-jhHPxFOczj3RkmCX2QZICQYnfmo6hQwhg
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTc3NjE1OSwiZXhwIjoyMDc1MzUyMTU5fQ.SbhkLCmjqUDA1oBWLnXVzOeoiKYriiXe7AZ6L-9C2ag
+
+# JWT Configuration
+JWT_SECRET=your-jwt-secret-key-change-in-production
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_HOURS=24
 
 # Model settings
 MODEL_PATH=models/skin_classifier.pth
@@ -35,6 +41,10 @@ TRAINING_DATA_PATH=training_data
 BATCH_SIZE=32
 LEARNING_RATE=0.001
 EPOCHS=50
+
+# File Upload Configuration
+MAX_FILE_SIZE=10485760
+ALLOWED_FILE_TYPES=image/jpeg,image/jpg,image/png,video/mp4
 ```
 
 ## Training Data Folders Created
