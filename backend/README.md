@@ -4,6 +4,14 @@ A Python backend service that uses OpenCV and PyTorch to analyze skin conditions
 
 ## Features
 
+- **User Authentication**: Complete user management with Supabase Auth
+  - User registration and login
+  - Password reset functionality
+  - JWT token-based authentication
+- **User Profiles**: Comprehensive user profile management
+  - Basic profile information
+  - Detailed skin profile with allergies, conditions, and preferences
+  - Image storage and management
 - **Face Detection**: Uses OpenCV's Haar Cascade to detect faces in images and videos
 - **Skin Condition Classification**: PyTorch-based CNN to classify various skin conditions:
   - Acne, blackheads, whiteheads
@@ -11,9 +19,10 @@ A Python backend service that uses OpenCV and PyTorch to analyze skin conditions
   - Wrinkles, aging signs
   - Dry skin, oily skin, sensitive skin
   - Rosacea, eczema
-- **Product Recommendations**: Mock Google Store API integration for skincare product suggestions
+- **Personalized Product Recommendations**: Enhanced recommendations based on user's skin profile
 - **Routine Generation**: Automatically generates personalized morning and evening skincare routines
-- **REST API**: FastAPI-based API for easy frontend integration
+- **Database Integration**: Full Supabase integration for data persistence
+- **REST API**: FastAPI-based API with authentication middleware
 
 ## Setup
 
@@ -96,10 +105,73 @@ The training script will:
 
 ### API Endpoints
 
-#### `POST /analyze-skin`
-Analyze skin conditions from uploaded image or video.
+#### Authentication Endpoints
+
+##### `POST /auth/signup`
+Register a new user account.
+
+**Request**: 
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "username": "optional_username"
+}
+```
+
+##### `POST /auth/signin`
+Sign in to user account.
+
+**Request**: 
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+##### `GET /auth/me`
+Get current user information (requires authentication).
+
+**Headers**: `Authorization: Bearer <token>`
+
+#### Profile Management Endpoints
+
+##### `GET /profile`
+Get user profile (requires authentication).
+
+##### `PUT /profile`
+Update user profile (requires authentication).
+
+##### `POST /skin-profile`
+Create or update user skin profile (requires authentication).
+
+**Request**: 
+```json
+{
+  "skin_type": "dry",
+  "skin_tone": "medium",
+  "acne_severity": "mild",
+  "allergies": ["fragrance", "alcohol"],
+  "primary_concerns": ["acne", "hyperpigmentation"],
+  "skin_goals": ["clear_skin", "even_tone"]
+}
+```
+
+##### `GET /skin-profile`
+Get user skin profile (requires authentication).
+
+##### `GET /images`
+Get user's uploaded images (requires authentication).
+
+#### Analysis Endpoints
+
+##### `POST /analyze-skin`
+Analyze skin conditions from uploaded image or video (requires authentication).
 
 **Request**: Multipart form data with image/video file
+**Headers**: `Authorization: Bearer <token>`
+
 **Response**:
 ```json
 {
@@ -107,21 +179,22 @@ Analyze skin conditions from uploaded image or video.
   "detected_conditions": ["acne", "hyperpigmentation"],
   "recommended_products": [...],
   "skincare_routine": {...},
-  "analysis_timestamp": "2024-01-01T12:00:00"
+  "analysis_timestamp": "2024-01-01T12:00:00",
+  "user_skin_profile": {...}
 }
 ```
 
-#### `POST /search-products`
-Search for products based on skin conditions.
+##### `POST /search-products`
+Search for products based on skin conditions (requires authentication).
 
 **Request**: JSON with conditions list
-**Response**: List of recommended products
+**Headers**: `Authorization: Bearer <token>`
 
-#### `POST /generate-routine`
-Generate personalized skincare routine.
+##### `POST /generate-routine`
+Generate personalized skincare routine (requires authentication).
 
 **Request**: JSON with conditions and products
-**Response**: Morning and evening routine with instructions
+**Headers**: `Authorization: Bearer <token>`
 
 ## Model Architecture
 
