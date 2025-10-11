@@ -1,6 +1,6 @@
-import { ProductsPage } from "@/components/products-page"
+import { LandingPage } from "@/components/landing-page"
 
 export default function Home() {
-  return <ProductsPage />
+  return <LandingPage />
 }
 
