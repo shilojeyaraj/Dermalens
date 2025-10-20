@@ -1,39 +1,42 @@
 """
-OpenAI Vision API service for comprehensive skin analysis
+Google Gemini API service for comprehensive skin analysis
 """
-from openai import OpenAI
+import google.generativeai as genai
 from typing import Dict, List, Optional, Any
 import base64
 import logging
-from config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_ENABLED
+from PIL import Image
+import io
+from config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_ENABLED
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class OpenAISkinAnalysisService:
-    """Service for analyzing skin conditions using OpenAI Vision API"""
+class GeminiSkinAnalysisService:
+    """Service for analyzing skin conditions using Google Gemini API"""
     
     def __init__(self):
-        """Initialize the OpenAI service"""
-        self.api_key = OPENAI_API_KEY
-        self.model = OPENAI_MODEL
-        self.enabled = OPENAI_ENABLED and self.api_key
-        self.client = None
+        """Initialize the Gemini service"""
+        self.api_key = GEMINI_API_KEY
+        self.model_name = GEMINI_MODEL
+        self.enabled = GEMINI_ENABLED and self.api_key
+        self.model = None
         
         if self.enabled:
             try:
-                self.client = OpenAI(api_key=self.api_key)
-                logger.info("OpenAI Vision API initialized successfully")
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel(self.model_name)
+                logger.info("Google Gemini API initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize OpenAI API: {str(e)}")
+                logger.error(f"Failed to initialize Gemini API: {str(e)}")
                 self.enabled = False
         else:
-            logger.warning("OpenAI API is not enabled or missing API key")
+            logger.warning("Gemini API is not enabled or missing API key")
     
     def is_enabled(self) -> bool:
-        """Check if OpenAI API is enabled and configured"""
+        """Check if Gemini API is enabled and configured"""
         return self.enabled
     
     def analyze_skin_image(
@@ -43,7 +46,7 @@ class OpenAISkinAnalysisService:
         user_skin_profile: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Analyze skin image using OpenAI Vision API
+        Analyze skin image using Google Gemini API
         
         Args:
             image_data: Raw image bytes
@@ -56,58 +59,33 @@ class OpenAISkinAnalysisService:
         if not self.enabled:
             return {
                 "success": False,
-                "error": "OpenAI API is not enabled",
+                "error": "Gemini API is not enabled",
                 "analysis": None
             }
         
         try:
-            # Encode image to base64
-            base64_image = base64.b64encode(image_data).decode('utf-8')
+            # Convert bytes to PIL Image for Gemini
+            image = Image.open(io.BytesIO(image_data))
             
             # Build the analysis prompt
             prompt = self._build_analysis_prompt(user_profile, user_skin_profile)
             
-            # Call OpenAI Vision API
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert dermatologist with years of experience in skin analysis and skincare recommendations."
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=2000,
-                temperature=0.7
-            )
+            # Call Gemini API
+            response = self.model.generate_content([prompt, image])
             
             # Parse the response
-            analysis_text = response.choices[0].message.content
+            analysis_text = response.text
             parsed_analysis = self._parse_analysis_response(analysis_text)
             
             return {
                 "success": True,
                 "analysis": parsed_analysis,
                 "raw_response": analysis_text,
-                "model_used": self.model
+                "model_used": self.model_name
             }
             
         except Exception as e:
-            logger.error(f"Error during OpenAI skin analysis: {str(e)}")
+            logger.error(f"Error during Gemini skin analysis: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
@@ -195,7 +173,7 @@ class OpenAISkinAnalysisService:
         return "\n".join(prompt_parts)
     
     def _parse_analysis_response(self, analysis_text: str) -> Dict[str, Any]:
-        """Parse OpenAI response into structured format"""
+        """Parse Gemini response into structured format"""
         
         # Initialize result structure
         result = {
@@ -305,5 +283,4 @@ class OpenAISkinAnalysisService:
 
 
 # Global service instance
-openai_analysis_service = OpenAISkinAnalysisService()
-
+gemini_analysis_service = GeminiSkinAnalysisService()

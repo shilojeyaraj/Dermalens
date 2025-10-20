@@ -17,10 +17,10 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyAtT3Jon9cWkbfnNLR91F9J810vvj
 GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "96653b7de4a3d49fe")
 GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
 
-# OpenAI API Configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")  # gpt-4o has vision capabilities
-OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "False").lower() == "true"
+# Google Gemini API Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCI1YRrJprS3ADJIY1U_deeFiJUTa4T_hk")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")  # gemini-1.5-pro has vision capabilities
+GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
 
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")

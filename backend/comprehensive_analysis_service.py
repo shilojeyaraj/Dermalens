@@ -8,7 +8,7 @@ from typing import Dict, Optional, Any
 import logging
 import requests
 from database import db_manager
-from openai_analysis_service import openai_analysis_service
+from gemini_analysis_service import gemini_analysis_service
 from google_search_service import google_search_service
 
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +20,7 @@ class ComprehensiveSkinAnalysisService:
     
     def __init__(self):
         self.db = db_manager
-        self.ai = openai_analysis_service
+        self.ai = gemini_analysis_service
         self.search = google_search_service
     
     async def analyze_user_by_id(
@@ -103,8 +103,8 @@ class ComprehensiveSkinAnalysisService:
                     "step_failed": "download_image"
                 }
             
-            # Step 5: Analyze image with OpenAI Vision API
-            logger.info("Analyzing image with OpenAI Vision API...")
+            # Step 5: Analyze image with Google Gemini API
+            logger.info("Analyzing image with Google Gemini API...")
             analysis_result = self.ai.analyze_skin_image(
                 image_data=image_data,
                 user_profile=user_profile,
@@ -114,7 +114,7 @@ class ComprehensiveSkinAnalysisService:
             if not analysis_result["success"]:
                 return {
                     "success": False,
-                    "error": f"AI analysis failed: {analysis_result.get('error')}",
+                    "error": f"Gemini analysis failed: {analysis_result.get('error')}",
                     "step_failed": "ai_analysis"
                 }
             

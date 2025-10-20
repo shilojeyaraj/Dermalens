@@ -4,7 +4,7 @@
 
 Your Dermalens backend now has a complete AI-powered skin analysis system that:
 1. **Fetches user data** from Supabase (profile, skin info, images)
-2. **Analyzes images** using OpenAI Vision API (GPT-4 with vision)
+2. **Analyzes images** using Google Gemini API (Gemini 1.5 Pro with vision)
 3. **Searches real products** using Google Custom Search
 4. **Generates personalized** skincare routines
 
@@ -18,7 +18,7 @@ User Request (user_id)
     ├── Fetch skin profile (allergies, concerns)
     └── Fetch face images
         ↓
-    OpenAI Vision API (GPT-4o)
+    Google Gemini API (Gemini 1.5 Pro)
     ├── Analyze facial skin image
     ├── Detect conditions (acne, wrinkles, etc.)
     ├── Assess skin type & severity
@@ -144,16 +144,16 @@ User Request (user_id)
 
 ## Setup Requirements
 
-### 1. OpenAI API Key
+### 1. Google Gemini API Key
 
 Add to `.env`:
 ```env
-OPENAI_API_KEY=sk-proj-YOUR_KEY_HERE
-OPENAI_ENABLED=True
-OPENAI_MODEL=gpt-4o
+GEMINI_API_KEY=AIzaSyCI1YRrJprS3ADJIY1U_deeFiJUTa4T_hk
+GEMINI_ENABLED=True
+GEMINI_MODEL=gemini-1.5-pro
 ```
 
-Get your key from: https://platform.openai.com/api-keys
+Get your key from: https://aistudio.google.com/app/apikey
 
 ### 2. Google Custom Search API (Already Set Up ✅)
 
@@ -201,10 +201,10 @@ Backend workflow:
 4. Downloads image from Supabase Storage
 ```
 
-#### 4. AI Analysis (OpenAI Vision)
+#### 4. AI Analysis (Google Gemini)
 ```
-GPT-4o receives:
-  - Face image (base64 encoded)
+Gemini receives:
+  - Face image (PIL Image format)
   - User skin profile context
   - Allergy information
   - Current concerns
@@ -258,7 +258,7 @@ Each step includes:
   - Usage instructions
 ```
 
-## OpenAI Prompt Engineering
+## Google Gemini Prompt Engineering
 
 The system uses a carefully engineered prompt that:
 
@@ -310,7 +310,7 @@ for allergy in allergies:
 
 ## Cost Estimates
 
-### OpenAI API (GPT-4o Vision):
+### Google Gemini API (Gemini 1.5 Pro):
 - ~$0.01 per image analysis
 - 100 analyses = $1.00
 - Very affordable!
@@ -341,7 +341,7 @@ This will:
 The system gracefully handles failures:
 
 ```python
-if not openai_analysis_service.is_enabled():
+if not gemini_analysis_service.is_enabled():
     # Falls back to basic PyTorch model
     
 if not google_search_service.is_enabled():
@@ -422,15 +422,15 @@ const results = await analysisResponse.json();
 ### Track These Metrics:
 - Analysis success rate
 - Average analysis time
-- API costs (OpenAI + Google)
+- API costs (Gemini + Google)
 - User satisfaction
 - Product click-through rates
 
 ## Next Steps
 
-1. ✅ Get OpenAI API key
+1. ✅ Get Google Gemini API key
 2. ✅ Add key to `.env` file
-3. ✅ Install dependencies: `pip install openai`
+3. ✅ Install dependencies: `pip install google-generativeai`
 4. ✅ Test the system
 5. 🎨 Build frontend UI to display results
 
@@ -439,7 +439,7 @@ const results = await analysisResponse.json();
 **Your Dermalens backend now provides professional-grade AI skin analysis with real product recommendations!** 🎉
 
 The system combines:
-- ✅ Computer vision (OpenAI GPT-4o)
+- ✅ Computer vision (Google Gemini)
 - ✅ User context (Supabase data)
 - ✅ Real products (Google Search)
 - ✅ Personalized routines (AI-generated)
