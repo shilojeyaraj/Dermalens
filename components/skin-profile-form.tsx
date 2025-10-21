@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// Removed Radix UI Select import - using HTML select instead
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
@@ -111,14 +111,32 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
     console.log('📊 [SKIN PROFILE] Form data:', formData)
     console.log('🔄 [SKIN PROFILE] Is update?', !!skinProfile)
 
+    // Filter out empty string values and handle enum constraints
+    const cleanedFormData = Object.fromEntries(
+      Object.entries(formData).map(([key, value]) => {
+        if (value === "") {
+          return [key, null]
+        }
+        
+        // Handle specific enum field mappings
+        if (key === "acne_severity" && value === "moderate") {
+          return [key, "moderate_acne"] // Map to valid enum value
+        }
+        
+        return [key, value]
+      })
+    )
+
+    console.log('🧹 [SKIN PROFILE] Cleaned form data:', cleanedFormData)
+
     try {
       if (skinProfile) {
         console.log('📝 [SKIN PROFILE] Updating existing profile...')
-        await updateSkinProfile(formData)
+        await updateSkinProfile(cleanedFormData)
         console.log('✅ [SKIN PROFILE] Profile updated successfully')
       } else {
         console.log('🆕 [SKIN PROFILE] Creating new profile...')
-        await createSkinProfile(formData)
+        await createSkinProfile(cleanedFormData)
         console.log('✅ [SKIN PROFILE] Profile created successfully')
       }
       console.log('🎯 [SKIN PROFILE] Calling onComplete callback...')
@@ -148,9 +166,8 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
   ]
 
   const acneSeverity = [
-    { value: "none", label: "None - No acne or breakouts" },
     { value: "mild", label: "Mild - Occasional small pimples" },
-    { value: "moderate", label: "Moderate - Regular breakouts, some inflammation" },
+    { value: "moderate_acne", label: "Moderate - Regular breakouts, some inflammation" },
     { value: "severe", label: "Severe - Frequent, inflamed breakouts" }
   ]
 
@@ -188,17 +205,17 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
     { value: "large_pores", label: "Large Pores" }
   ]
 
-  // Note: medical_conditions column doesn't exist in current schema
-  // const medicalConditions = [
-  //   { value: "acne", label: "Acne Vulgaris" },
-  //   { value: "rosacea", label: "Rosacea" },
-  //   { value: "eczema", label: "Eczema (Atopic Dermatitis)" },
-  //   { value: "psoriasis", label: "Psoriasis" },
-  //   { value: "dermatitis", label: "Contact Dermatitis" },
-  //   { value: "melasma", label: "Melasma" },
-  //   { value: "vitiligo", label: "Vitiligo" },
-  //   { value: "seborrheic_dermatitis", label: "Seborrheic Dermatitis" }
-  // ]
+  // Medical conditions for pre_existing_conditions field
+  const medicalConditions = [
+    { value: "acne", label: "Acne Vulgaris" },
+    { value: "rosacea", label: "Rosacea" },
+    { value: "eczema", label: "Eczema (Atopic Dermatitis)" },
+    { value: "psoriasis", label: "Psoriasis" },
+    { value: "dermatitis", label: "Contact Dermatitis" },
+    { value: "melasma", label: "Melasma" },
+    { value: "vitiligo", label: "Vitiligo" },
+    { value: "seborrheic_dermatitis", label: "Seborrheic Dermatitis" }
+  ]
 
   const commonAllergies = [
     { value: "fragrance", label: "Fragrance/Parfum" },
@@ -261,82 +278,87 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="skin_type">Skin Type</Label>
-                  <Select value={formData.skin_type} onValueChange={(value) => handleInputChange("skin_type", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your skin type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {skinTypes.map(type => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="skin_type"
+                    value={formData.skin_type}
+                    onChange={(e) => handleInputChange("skin_type", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select your skin type</option>
+                    {skinTypes.map(type => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="skin_tone">Skin Tone</Label>
-                  <Select value={formData.skin_tone} onValueChange={(value) => handleInputChange("skin_tone", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select your skin tone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {skinTones.map(tone => (
-                        <SelectItem key={tone.value} value={tone.value}>
-                          {tone.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="skin_tone"
+                    value={formData.skin_tone}
+                    onChange={(e) => handleInputChange("skin_tone", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select your skin tone</option>
+                    {skinTones.map(tone => (
+                      <option key={tone.value} value={tone.value}>
+                        {tone.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="acne_severity">Acne Severity</Label>
-                  <Select value={formData.acne_severity} onValueChange={(value) => handleInputChange("acne_severity", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select acne severity" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {acneSeverity.map(severity => (
-                        <SelectItem key={severity.value} value={severity.value}>
-                          {severity.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="acne_severity"
+                    value={formData.acne_severity}
+                    onChange={(e) => handleInputChange("acne_severity", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select acne severity</option>
+                    {acneSeverity.map(severity => (
+                      <option key={severity.value} value={severity.value}>
+                        {severity.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="pore_size">Pore Size</Label>
-                  <Select value={formData.pore_size} onValueChange={(value) => handleInputChange("pore_size", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select pore size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {poreSize.map(size => (
-                        <SelectItem key={size.value} value={size.value}>
-                          {size.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="pore_size"
+                    value={formData.pore_size}
+                    onChange={(e) => handleInputChange("pore_size", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select pore size</option>
+                    {poreSize.map(size => (
+                      <option key={size.value} value={size.value}>
+                        {size.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="sensitivity_level">Sensitivity Level</Label>
-                  <Select value={formData.sensitivity_level} onValueChange={(value) => handleInputChange("sensitivity_level", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select sensitivity level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sensitivityLevel.map(level => (
-                        <SelectItem key={level.value} value={level.value}>
-                          {level.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="sensitivity_level"
+                    value={formData.sensitivity_level}
+                    onChange={(e) => handleInputChange("sensitivity_level", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select sensitivity level</option>
+                    {sensitivityLevel.map(level => (
+                      <option key={level.value} value={level.value}>
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -481,66 +503,70 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="diet_type">Diet Type</Label>
-                  <Select value={formData.diet_type} onValueChange={(value) => handleInputChange("diet_type", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select diet type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {dietTypes.map(diet => (
-                        <SelectItem key={diet} value={diet}>
-                          {diet.charAt(0).toUpperCase() + diet.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="diet_type"
+                    value={formData.diet_type}
+                    onChange={(e) => handleInputChange("diet_type", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select diet type</option>
+                    {dietTypes.map(diet => (
+                      <option key={diet} value={diet}>
+                        {diet.charAt(0).toUpperCase() + diet.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="water_intake">Water Intake</Label>
-                  <Select value={formData.water_intake} onValueChange={(value) => handleInputChange("water_intake", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select water intake" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {waterIntake.map(intake => (
-                        <SelectItem key={intake} value={intake}>
-                          {intake.charAt(0).toUpperCase() + intake.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="water_intake"
+                    value={formData.water_intake}
+                    onChange={(e) => handleInputChange("water_intake", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select water intake</option>
+                    {waterIntake.map(intake => (
+                      <option key={intake} value={intake}>
+                        {intake.charAt(0).toUpperCase() + intake.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="sleep_hours">Sleep Hours</Label>
-                  <Select value={formData.sleep_hours} onValueChange={(value) => handleInputChange("sleep_hours", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select sleep hours" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sleepHours.map(hours => (
-                        <SelectItem key={hours} value={hours}>
-                          {hours} hours
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="sleep_hours"
+                    value={formData.sleep_hours}
+                    onChange={(e) => handleInputChange("sleep_hours", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select sleep hours</option>
+                    {sleepHours.map(hours => (
+                      <option key={hours} value={hours}>
+                        {hours} hours
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="sun_exposure">Sun Exposure</Label>
-                  <Select value={formData.sun_exposure} onValueChange={(value) => handleInputChange("sun_exposure", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select sun exposure" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sunExposure.map(exposure => (
-                        <SelectItem key={exposure} value={exposure}>
-                          {exposure.charAt(0).toUpperCase() + exposure.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="sun_exposure"
+                    value={formData.sun_exposure}
+                    onChange={(e) => handleInputChange("sun_exposure", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select sun exposure</option>
+                    {sunExposure.map(exposure => (
+                      <option key={exposure} value={exposure}>
+                        {exposure.charAt(0).toUpperCase() + exposure.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -553,34 +579,36 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="routine_frequency">Routine Frequency</Label>
-                  <Select value={formData.routine_frequency} onValueChange={(value) => handleInputChange("routine_frequency", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select routine frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {routineFrequency.map(frequency => (
-                        <SelectItem key={frequency} value={frequency}>
-                          {frequency.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="routine_frequency"
+                    value={formData.routine_frequency}
+                    onChange={(e) => handleInputChange("routine_frequency", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select routine frequency</option>
+                    {routineFrequency.map(frequency => (
+                      <option key={frequency} value={frequency}>
+                        {frequency.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="routine_type">Routine Type</Label>
-                  <Select value={formData.routine_type} onValueChange={(value) => handleInputChange("routine_type", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select routine type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {routineType.map(type => (
-                        <SelectItem key={type} value={type}>
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="routine_type"
+                    value={formData.routine_type}
+                    onChange={(e) => handleInputChange("routine_type", e.target.value)}
+                    className="w-full h-10 px-3 py-2 border border-input rounded-md bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">Select routine type</option>
+                    {routineType.map(type => (
+                      <option key={type} value={type}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>

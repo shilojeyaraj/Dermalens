@@ -8,6 +8,7 @@ import { FaceScanPrompt } from "@/components/face-scan-prompt"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, User, Settings } from "lucide-react"
+// Removed TestSelect import - no longer needed
 
 export default function ProfilePage() {
   const { user, skinProfile, isLoading } = useUser()

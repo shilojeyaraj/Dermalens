@@ -111,3 +111,12 @@
     animation: scanMove 3s ease-in-out infinite alternate;
   }
 }
+
+/* Ensure Radix UI Select dropdowns are visible */
+[data-radix-select-content] {
+  z-index: 9999 !important;
+}
+
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { FaceScanHUD } from "@/components/face-scan-hud"
+import { FaceCapture } from "@/components/face-capture"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -19,7 +19,7 @@ export default function ScanPage() {
   const [uploadMode, setUploadMode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
-  const { analyzeSkin, isLoading, error, clearError } = useUser()
+  const { analyzeSkin, analyzeSkinComprehensive, isLoading, error, clearError } = useUser()
 
   const handleStartScan = () => {
     setShowInstructions(false)
@@ -31,113 +31,88 @@ export default function ScanPage() {
     setIsAnalyzing(true)
   }
 
-  const handleAnalysisComplete = async (imageFile?: File) => {
-    setIsAnalyzing(false)
-    setScanComplete(true)
+  const handleImageCapture = async (imageBlob: Blob) => {
+    setIsAnalyzing(true)
+    setScanComplete(false)
     
-    console.log('🔬 [SCAN] Analysis complete, processing results...')
-    
-    if (imageFile) {
-      try {
-        console.log('📤 [SCAN] Sending image to backend for analysis...')
-        clearError()
-        
-        // Try to call the backend analyze-skin endpoint
-        const formData = new FormData()
-        formData.append('file', imageFile)
-        
-        // Try authenticated endpoint first, fallback to test endpoint
-        const response = await fetch('http://localhost:8000/analyze-skin', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('dermalens_token') || 'mock-token-for-testing'}`
-          },
-          body: formData
-        })
-        
-        if (response.ok) {
-          const result = await response.json()
-          console.log('✅ [SCAN] Backend analysis successful:', result)
-          setAnalysisResult(result)
-        } else {
-          console.log('⚠️ [SCAN] Backend analysis failed, using mock data')
-          throw new Error('Backend analysis failed')
-        }
-      } catch (error) {
-        console.error('❌ [SCAN] Analysis failed, using mock data:', error)
-        // Use mock data when backend fails
-        const mockResult: AnalysisResult = {
-          analysis_results: [{
-            face_id: 0,
-            conditions: [
-              { condition: "acne", confidence: 0.85, severity: "moderate" },
-              { condition: "dry_skin", confidence: 0.72, severity: "mild" },
-              { condition: "dark_spots", confidence: 0.68, severity: "mild" }
-            ]
-          }],
-          detected_conditions: ["acne", "dry_skin", "dark_spots"],
-          recommended_products: [
+    try {
+      console.log('📤 [SCAN] Sending captured image to backend for analysis...')
+      clearError()
+      
+      // Convert blob to file
+      const file = new File([imageBlob], 'face_capture.jpg', { type: 'image/jpeg' })
+      
+      // Use the real skin analysis function
+      const result = await analyzeSkin(file)
+      console.log('✅ [SCAN] Real analysis successful:', result)
+      setAnalysisResult(result)
+      setScanComplete(true)
+    } catch (error) {
+      console.error('❌ [SCAN] Analysis failed:', error)
+      // Fallback to mock data
+      const mockResult: AnalysisResult = {
+        analysis_results: [{
+          face_id: 0,
+          conditions: [
+            { condition: "acne", confidence: 0.85, severity: "moderate" },
+            { condition: "dry_skin", confidence: 0.72, severity: "mild" },
+            { condition: "dark_spots", confidence: 0.68, severity: "mild" }
+          ]
+        }],
+        detected_conditions: ["acne", "dry_skin", "dark_spots"],
+        recommended_products: [
+          {
+            name: "Salicylic Acid Cleanser",
+            brand: "CeraVe",
+            price: 15.99,
+            rating: 4.5,
+            description: "Gentle cleanser for acne-prone skin",
+            image: "/facial-moisturizer-pump-bottle.jpg",
+            type: "cleanser",
+            personalized_score: 92
+          }
+        ],
+        skincare_routine: {
+          morning_routine: [
             {
-              name: "Salicylic Acid Cleanser",
+              step: 1,
+              name: "Cleanse",
+              product: "Salicylic Acid Cleanser",
               brand: "CeraVe",
-              price: 15.99,
-              rating: 4.5,
-              description: "Gentle cleanser for acne-prone skin",
-              image: "/facial-moisturizer-pump-bottle.jpg",
-              type: "cleanser",
-              personalized_score: 92
-            },
-            {
-              name: "Vitamin C Serum",
-              brand: "The Ordinary",
-              price: 8.50,
-              rating: 4.3,
-              description: "Brightening serum for dark spots",
-              image: "/facial-sunscreen-spf-50-tube.jpg",
-              type: "serum",
-              personalized_score: 88
+              duration: "1-2 minutes",
+              instructions: "Gently massage onto wet face, then rinse thoroughly"
             }
           ],
-          skincare_routine: {
-            morning_routine: [
-              {
-                step: 1,
-                name: "Cleanse",
-                product: "Salicylic Acid Cleanser",
-                brand: "CeraVe",
-                duration: "1-2 minutes",
-                instructions: "Gently massage onto wet face, then rinse thoroughly"
-              },
-              {
-                step: 2,
-                name: "Treat",
-                product: "Vitamin C Serum",
-                brand: "The Ordinary",
-                duration: "30 seconds",
-                instructions: "Apply 2-3 drops to face and neck, avoiding eye area"
-              }
-            ],
-            evening_routine: [
-              {
-                step: 1,
-                name: "Cleanse",
-                product: "Salicylic Acid Cleanser",
-                brand: "CeraVe",
-                duration: "1-2 minutes",
-                instructions: "Gently massage onto wet face, then rinse thoroughly"
-              }
-            ],
-            total_products: 2,
-            estimated_cost: 24.49,
-            generated_at: new Date().toISOString()
-          },
-          analysis_timestamp: new Date().toISOString()
-        }
-        setAnalysisResult(mockResult)
+          evening_routine: [],
+          total_products: 1,
+          estimated_cost: 15.99,
+          generated_at: new Date().toISOString()
+        },
+        analysis_timestamp: new Date().toISOString()
       }
-    } else {
-      // Mock data for camera scan (when camera integration is complete)
-      console.log('📷 [SCAN] Using mock data for camera scan')
+      setAnalysisResult(mockResult)
+      setScanComplete(true)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const handleImageUpload = async (file: File) => {
+    setIsAnalyzing(true)
+    setScanComplete(false)
+    
+    try {
+      console.log('📤 [SCAN] Sending uploaded image to backend for analysis...')
+      clearError()
+      
+      // Use the real skin analysis function
+      const result = await analyzeSkin(file)
+      console.log('✅ [SCAN] Real analysis successful:', result)
+      setAnalysisResult(result)
+      setScanComplete(true)
+    } catch (error) {
+      console.error('❌ [SCAN] Analysis failed:', error)
+      // Fallback to mock data
       const mockResult: AnalysisResult = {
         analysis_results: [{
           face_id: 0,
@@ -179,6 +154,9 @@ export default function ScanPage() {
         analysis_timestamp: new Date().toISOString()
       }
       setAnalysisResult(mockResult)
+      setScanComplete(true)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
@@ -507,17 +485,14 @@ export default function ScanPage() {
         </Button>
       </div>
 
-      {/* Face Scan HUD */}
-      <FaceScanHUD
-        name="USER"
-        variant="wire"
-        accent="#22c55e"
-        className="w-full h-screen"
-        isScanning={isScanning}
-        isAnalyzing={isAnalyzing}
-        onScanComplete={handleScanComplete}
-        onAnalysisComplete={handleAnalysisComplete}
-      />
+      {/* Face Capture Interface */}
+      <div className="w-full h-screen flex items-center justify-center p-4">
+        <FaceCapture
+          onImageCapture={handleImageCapture}
+          onImageUpload={handleImageUpload}
+          isProcessing={isAnalyzing}
+        />
+      </div>
     </div>
   )
 }

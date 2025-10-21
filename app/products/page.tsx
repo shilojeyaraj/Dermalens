@@ -15,12 +15,12 @@ export default function ProductsPage() {
 
   // Redirect to login if not signed in
   useEffect(() => {
-    if (!user?.isSignedIn) {
+    if (!user) {
       router.push('/login')
     }
   }, [user, router])
 
-  if (!user?.isSignedIn) {
+  if (!user) {
     return null
   }
 

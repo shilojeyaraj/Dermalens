@@ -14,6 +14,7 @@ import {
   RefreshCw
 } from "lucide-react"
 import { useUser } from "@/contexts/user-context"
+import { ServiceStatus } from "@/components/service-status"
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -71,7 +72,13 @@ export default function DashboardPage() {
         </div>
         
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-foreground mb-4">Products Dashboard</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-4">Welcome, {user.username}!</h1>
+          <p className="text-muted-foreground text-lg">Your personalized skincare dashboard</p>
+        </div>
+
+        {/* Service Status */}
+        <div className="mb-8 max-w-2xl mx-auto">
+          <ServiceStatus />
         </div>
 
         {error && (
@@ -90,12 +97,12 @@ export default function DashboardPage() {
               </div>
               <CardTitle className="text-xl text-green-800">Skin Analysis</CardTitle>
               <CardDescription className="text-green-600 font-medium">
-                Upload your photo to get started
+                AI-powered skin analysis with OpenAI Vision
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-sm text-green-700">
-                This is where the skin analysis feature will be implemented.
+                Get comprehensive skin analysis using advanced AI technology and personalized recommendations.
               </p>
             </CardContent>
           </Card>
@@ -108,12 +115,12 @@ export default function DashboardPage() {
               </div>
               <CardTitle className="text-xl text-green-800">Recommended Products</CardTitle>
               <CardDescription className="text-green-600 font-medium">
-                Based on your skin analysis
+                Real products from Google Search
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-sm text-green-700">
-                This is where product recommendations will be displayed.
+                Discover real skincare products from Sephora, Ulta, and more, filtered by your skin profile.
               </p>
             </CardContent>
           </Card>
@@ -126,12 +133,12 @@ export default function DashboardPage() {
               </div>
               <CardTitle className="text-xl text-green-800">Skincare Routine</CardTitle>
               <CardDescription className="text-green-600 font-medium">
-                Personalized daily routine
+                AI-generated personalized routine
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-sm text-green-700">
-                This is where the skincare routine will be shown.
+                Get a complete morning and evening routine tailored to your specific skin needs.
               </p>
             </CardContent>
           </Card>

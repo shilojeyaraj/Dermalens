@@ -35,6 +35,7 @@ interface UserContextType {
   createSkinProfile: (data: Partial<SkinProfile>) => Promise<void>
   updateSkinProfile: (data: Partial<SkinProfile>) => Promise<void>
   analyzeSkin: (file: File) => Promise<AnalysisResult>
+  analyzeSkinComprehensive: (imageId?: string) => Promise<any>
   saveFaceScanData: (scanData: Omit<FaceScanData, 'id' | 'userId' | 'timestamp'>) => void
   getLatestScanData: () => FaceScanData | null
   clearError: () => void
@@ -439,6 +440,59 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const analyzeSkinComprehensive = async (imageId?: string): Promise<any> => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      console.log('🔬 [COMPREHENSIVE] Starting comprehensive analysis with Gemini 1.5 Pro...')
+      console.log('👤 [COMPREHENSIVE] User ID:', user.id)
+      console.log('🖼️ [COMPREHENSIVE] Image ID:', imageId)
+
+      // For now, let's use a simple approach without authentication
+      // since our custom auth doesn't use JWT tokens
+      const response = await fetch('http://localhost:8000/api/analyze-user-comprehensive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          image_id: imageId
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Comprehensive analysis failed')
+      }
+
+      const result = await response.json()
+      console.log('✅ [COMPREHENSIVE] Analysis successful:', result)
+
+      // Save scan data locally
+      if (result.analysis_results) {
+        const scanData: Omit<FaceScanData, 'id' | 'userId' | 'timestamp'> = {
+          conditions: result.analysis_results.flatMap((r: any) => r.conditions || []),
+          analysisResults: result
+        }
+        saveFaceScanData(scanData)
+      }
+
+      return result
+    } catch (error: any) {
+      console.error('❌ [COMPREHENSIVE] Analysis failed:', error)
+      setError(error.message || 'Comprehensive analysis failed')
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const saveFaceScanData = (scanData: Omit<FaceScanData, 'id' | 'userId' | 'timestamp'>) => {
     if (!user) return
 
@@ -476,6 +530,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       createSkinProfile,
       updateSkinProfile,
       analyzeSkin,
+      analyzeSkinComprehensive,
       saveFaceScanData,
       getLatestScanData,
       clearError
