@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""
+Data seeding script for Elasticsearch
+Populates the skincare products index with sample data
+"""
+import os
+import sys
+import json
+import random
+from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+def generate_sample_products(count=1000):
+    """Generate realistic sample skincare products"""
+    
+    brands = [
+        "CeraVe", "The Ordinary", "Paula's Choice", "Neutrogena", "Olay",
+        "La Roche-Posay", "Avene", "Vichy", "Clinique", "Estée Lauder",
+        "Lancôme", "Dior", "Chanel", "SK-II", "Drunk Elephant",
+        "Glossier", "Fenty Beauty", "Rare Beauty", "Tatcha", "Dr. Jart+"
+    ]
+    
+    product_types = [
+        "cleanser", "serum", "moisturizer", "sunscreen", "exfoliant",
+        "toner", "essence", "mask", "oil", "treatment"
+    ]
+    
+    skin_conditions = [
+        "acne", "hyperpigmentation", "dark_spots", "wrinkles", "dry_skin",
+        "oily_skin", "sensitive_skin", "normal_skin", "blackheads", "whiteheads",
+        "rosacea", "eczema", "large_pores", "uneven_texture", "dull_skin"
+    ]
+    
+    skin_types = ["dry", "oily", "combination", "normal", "sensitive"]
+    
+    ingredients = [
+        "Niacinamide", "Hyaluronic Acid", "Salicylic Acid", "Retinol",
+        "Vitamin C", "Ceramides", "Peptides", "AHA", "BHA", "Squalane",
+        "Glycerin", "Aloe Vera", "Green Tea Extract", "Tea Tree Oil",
+        "Jojoba Oil", "Argan Oil", "Rosehip Oil", "Snail Mucin",
+        "Collagen", "Elastin", "Coenzyme Q10", "Alpha Arbutin"
+    ]
+    
+    products = []
+    
+    for i in range(count):
+        brand = random.choice(brands)
+        product_type = random.choice(product_types)
+        
+        # Generate realistic product name
+        if product_type == "cleanser":
+            name_suffixes = ["Cleanser", "Facial Wash", "Gel Cleanser", "Foaming Cleanser"]
+        elif product_type == "serum":
+            name_suffixes = ["Serum", "Treatment", "Ampoule", "Concentrate"]
+        elif product_type == "moisturizer":
+            name_suffixes = ["Moisturizer", "Cream", "Lotion", "Gel"]
+        elif product_type == "sunscreen":
+            name_suffixes = ["Sunscreen", "SPF", "Sun Protection", "UV Defense"]
+        else:
+            name_suffixes = [product_type.title(), "Treatment", "Care"]
+        
+        name = f"{brand} {random.choice(name_suffixes)}"
+        
+        # Generate realistic price
+        if brand in ["Chanel", "Dior", "Lancôme", "Estée Lauder", "SK-II"]:
+            price = round(random.uniform(50, 200), 2)
+        elif brand in ["Drunk Elephant", "Tatcha", "Dr. Jart+", "Glossier"]:
+            price = round(random.uniform(25, 80), 2)
+        else:
+            price = round(random.uniform(8, 45), 2)
+        
+        # Generate rating and review count
+        rating = round(random.uniform(3.0, 5.0), 1)
+        review_count = random.randint(10, 5000)
+        
+        # Generate skin conditions (1-4 per product)
+        num_conditions = random.randint(1, 4)
+        product_conditions = random.sample(skin_conditions, num_conditions)
+        
+        # Generate skin types (1-3 per product)
+        num_types = random.randint(1, 3)
+        product_skin_types = random.sample(skin_types, num_types)
+        
+        # Generate ingredients (3-8 per product)
+        num_ingredients = random.randint(3, 8)
+        product_ingredients = random.sample(ingredients, num_ingredients)
+        
+        # Generate boolean properties
+        allergen_free = random.choice([True, False])
+        fragrance_free = random.choice([True, False])
+        cruelty_free = random.choice([True, False])
+        vegan = random.choice([True, False])
+        
+        # Generate SPF level (only for sunscreens)
+        spf_level = None
+        if product_type == "sunscreen":
+            spf_level = random.choice([15, 30, 50, 60])
+        
+        product = {
+            "id": f"product_{i:04d}",
+            "name": name,
+            "brand": brand,
+            "description": f"Professional {product_type} for {', '.join(product_skin_types)} skin. Targets {', '.join(product_conditions[:2])}.",
+            "ingredients": ", ".join(product_ingredients),
+            "price": price,
+            "rating": rating,
+            "review_count": review_count,
+            "product_type": product_type,
+            "skin_conditions": product_conditions,
+            "skin_types": product_skin_types,
+            "url": f"https://example.com/products/{i:04d}",
+            "image_url": f"https://example.com/images/{i:04d}.jpg",
+            "allergen_free": allergen_free,
+            "fragrance_free": fragrance_free,
+            "cruelty_free": cruelty_free,
+            "vegan": vegan,
+            "spf_level": spf_level,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        products.append(product)
+    
+    return products
+
+def seed_elasticsearch():
+    """Seed Elasticsearch with sample data"""
+    try:
+        from elasticsearch_service import elasticsearch_service
+        
+        print("🌱 Seeding Elasticsearch with sample data...")
+        
+        # Generate sample products
+        print("📦 Generating sample products...")
+        products = generate_sample_products(1000)
+        print(f"✅ Generated {len(products)} products")
+        
+        # Index products in batches
+        batch_size = 100
+        total_indexed = 0
+        
+        for i in range(0, len(products), batch_size):
+            batch = products[i:i + batch_size]
+            
+            try:
+                result = elasticsearch_service.bulk_index_products(batch)
+                total_indexed += len(batch)
+                print(f"📤 Indexed batch {i//batch_size + 1}/{(len(products)-1)//batch_size + 1} ({len(batch)} products)")
+                
+            except Exception as e:
+                print(f"❌ Error indexing batch {i//batch_size + 1}: {e}")
+                continue
+        
+        print(f"🎉 Successfully indexed {total_indexed} products!")
+        
+        # Test search functionality
+        print("\n🧪 Testing search functionality...")
+        test_result = elasticsearch_service.search_products(
+            query="acne cleanser",
+            skin_conditions=["acne"],
+            skin_types=["oily"],
+            size=5
+        )
+        
+        if test_result["success"]:
+            print(f"✅ Search test successful! Found {len(test_result['products'])} products")
+            for product in test_result["products"][:3]:
+                print(f"  - {product['name']} by {product['brand']} (${product['price']})")
+        else:
+            print(f"❌ Search test failed: {test_result.get('error')}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error seeding Elasticsearch: {e}")
+        return False
+
+def main():
+    """Main function"""
+    print("🔬 Dermalens Elasticsearch Data Seeder")
+    print("=" * 50)
+    
+    # Check if Elasticsearch is running
+    try:
+        from elasticsearch_service import elasticsearch_service
+        elasticsearch_service.es.ping()
+        print("✅ Elasticsearch connection successful")
+    except Exception as e:
+        print(f"❌ Cannot connect to Elasticsearch: {e}")
+        print("💡 Make sure Elasticsearch is running:")
+        print("   docker run -d -p 9200:9200 elasticsearch:8.11.0")
+        return
+    
+    # Seed data
+    success = seed_elasticsearch()
+    
+    if success:
+        print("\n🎉 Data seeding completed successfully!")
+        print("🚀 Your Elasticsearch is ready for production!")
+    else:
+        print("\n❌ Data seeding failed!")
+        print("🔧 Check your Elasticsearch configuration and try again")
+
+if __name__ == "__main__":
+    main()

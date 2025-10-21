@@ -5,7 +5,22 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+try:
+    load_dotenv()
+except Exception as e:
+    print(f"Warning: Could not load .env file with default encoding: {e}")
+    # Try with different encodings
+    try:
+        load_dotenv(encoding='utf-16')
+        print("Successfully loaded .env file with UTF-16 encoding")
+    except Exception as e2:
+        try:
+            load_dotenv(encoding='latin-1')
+            print("Successfully loaded .env file with Latin-1 encoding")
+        except Exception as e3:
+            print(f"Could not load .env file with any encoding. Using default configuration values...")
+            print(f"UTF-16 error: {e2}")
+            print(f"Latin-1 error: {e3}")
 
 # Supabase Configuration
 SUPABASE_URL = "https://ezlevlxkxanlceofykrh.supabase.co"
@@ -18,7 +33,8 @@ API_PORT = int(os.getenv("API_PORT", 8000))
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
 # CORS Configuration
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+# Allow all origins for development (change for production)
+ALLOWED_ORIGINS = ["*"]
 
 # Model Configuration
 MODEL_PATH = os.getenv("MODEL_PATH", "models/skin_classifier.pth")
@@ -28,6 +44,36 @@ CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.3"))
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
+
+# External API Keys
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GOOGLE_WEB_SEARCH_API_KEY = os.getenv("GOOGLE_WEB_SEARCH_API_KEY", "")
+
+# Google Gemini Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
+
+# Elasticsearch Configuration
+ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+ELASTICSEARCH_API_KEY = os.getenv("ELASTICSEARCH_API_KEY", "")
+ELASTICSEARCH_USERNAME = os.getenv("ELASTICSEARCH_USERNAME", "")
+ELASTICSEARCH_PASSWORD = os.getenv("ELASTICSEARCH_PASSWORD", "")
+ELASTICSEARCH_SSL_VERIFY = os.getenv("ELASTICSEARCH_SSL_VERIFY", "false").lower() == "true"
+
+# OpenAI Configuration (keeping for fallback)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "False").lower() == "true"
+
+# Google Custom Search API Configuration
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "")
+GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
+GOOGLE_SEARCH_MAX_RESULTS = int(os.getenv("GOOGLE_SEARCH_MAX_RESULTS", "10"))
+GOOGLE_SEARCH_SAFE_SEARCH = os.getenv("GOOGLE_SEARCH_SAFE_SEARCH", "active")
+GOOGLE_SEARCH_COUNTRY = os.getenv("GOOGLE_SEARCH_COUNTRY", "us")
+GOOGLE_SEARCH_LANGUAGE = os.getenv("GOOGLE_SEARCH_LANGUAGE", "en")
 
 # File Upload Configuration
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
