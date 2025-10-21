@@ -25,3 +25,12 @@ google-cloud-storage>=2.10.0
 google-auth>=2.0.0
 google-auth-oauthlib>=1.0.0
 google-auth-httplib2>=0.1.0
+# Enhanced Google AI SDK packages
+google-cloud-aiplatform[gcs]>=1.38.1
+google-cloud-aiplatform[streaming]>=1.38.1
+google-cloud-aiplatform[monitoring]>=1.38.1
+google-cloud-aiplatform[ensemble]>=1.38.1
+# Additional AI/ML packages for enhanced functionality
+redis>=4.5.0  # For intelligent caching
+asyncio-mqtt>=0.13.0  # For real-time streaming
+prometheus-client>=0.17.0  # For performance monitoring

@@ -36,6 +36,26 @@ GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "t
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCI1YRrJprS3ADJIY1U_deeFiJUTa4T_hk")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")  # gemini-1.5-pro has vision capabilities
 GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
+
+# Vertex AI Configuration
+GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")
+GOOGLE_CLOUD_REGION = os.getenv("GOOGLE_CLOUD_REGION", "us-central1")
+VERTEX_AI_ENABLED = os.getenv("VERTEX_AI_ENABLED", "True").lower() == "true"
+VERTEX_AI_ENDPOINT = os.getenv("VERTEX_AI_ENDPOINT", f"projects/{GOOGLE_CLOUD_PROJECT}/locations/{GOOGLE_CLOUD_REGION}/endpoints/skin-analysis")
+VERTEX_AI_CACHE_ENABLED = os.getenv("VERTEX_AI_CACHE_ENABLED", "True").lower() == "true"
+VERTEX_AI_STREAMING_ENABLED = os.getenv("VERTEX_AI_STREAMING_ENABLED", "True").lower() == "true"
+
+# Multi-Model Configuration
+ENSEMBLE_ENABLED = os.getenv("ENSEMBLE_ENABLED", "True").lower() == "true"
+MODEL_ENSEMBLE_WEIGHTS = {
+    "condition_classifier": float(os.getenv("CONDITION_CLASSIFIER_WEIGHT", "0.4")),
+    "severity_analyzer": float(os.getenv("SEVERITY_ANALYZER_WEIGHT", "0.3")),
+    "skin_type_detector": float(os.getenv("SKIN_TYPE_DETECTOR_WEIGHT", "0.3"))
+}
+
+# Performance Monitoring
+PERFORMANCE_MONITORING_ENABLED = os.getenv("PERFORMANCE_MONITORING_ENABLED", "True").lower() == "true"
+METRICS_ENDPOINT = os.getenv("METRICS_ENDPOINT", f"projects/{GOOGLE_CLOUD_PROJECT}/locations/{GOOGLE_CLOUD_REGION}/endpoints/metrics")
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))

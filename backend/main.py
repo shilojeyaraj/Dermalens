@@ -151,7 +151,7 @@ def preprocess_image(image: np.ndarray) -> torch.Tensor:
     tensor = transform(pil_image).unsqueeze(0)
     return tensor.to(device)
 
-def classify_skin_conditions(face_regions: List[np.ndarray]) -> List[Dict[str, Any]]:
+def classify_skin_conditions(face_regions: List) -> List[Dict[str, Any]]:
     """Classify skin conditions in face regions"""
     results = []
     

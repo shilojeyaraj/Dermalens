@@ -111,38 +111,17 @@ class ComprehensiveSkinAnalysisService:
                     "step_failed": "download_image"
                 }
             
-<<<<<<< HEAD
-            # Step 5: Analyze image with Google Gemini 1.5 Pro
-            logger.info("Analyzing image with Google Gemini 1.5 Pro...")
-            analysis_result = self.ai.analyze_skin_image(
-                image_data=image_data,
-                user_profile=user_profile
-=======
             # Step 5: Analyze image with Google Gemini API
             logger.info("Analyzing image with Google Gemini API...")
             analysis_result = self.ai.analyze_skin_image(
                 image_data=image_data,
                 user_profile=user_profile,
                 user_skin_profile=user_skin_profile
->>>>>>> dd043fff8848e3dcdeb94f5e811abb74ade3030d
             )
             
             if not analysis_result["success"]:
                 return {
                     "success": False,
-<<<<<<< HEAD
-                    "error": f"AI analysis failed: {analysis_result.get('error')}",
-                    "step_failed": "ai_analysis"
-                }
-            
-            logger.info(f"Gemini detected {len(analysis_result['analysis']['skin_conditions'])} skin conditions")
-            
-            # Step 6: Generate personalized recommendations using Gemini
-            recommendations = self.ai.generate_personalized_report(
-                user_profile=user_profile,
-                analysis_results=[analysis_result['analysis']],
-                detected_conditions=[condition['condition'] for condition in analysis_result['analysis']['skin_conditions']]
-=======
                     "error": f"Gemini analysis failed: {analysis_result.get('error')}",
                     "step_failed": "ai_analysis"
                 }
@@ -153,7 +132,6 @@ class ComprehensiveSkinAnalysisService:
             recommendations = self.ai.generate_personalized_recommendations(
                 analysis_result,
                 user_skin_profile
->>>>>>> dd043fff8848e3dcdeb94f5e811abb74ade3030d
             )
             
             # Step 7: Search for real products using Google Custom Search
@@ -163,19 +141,11 @@ class ComprehensiveSkinAnalysisService:
                 user_skin_profile
             )
             
-<<<<<<< HEAD
-            # Step 8: Generate actionable routine using Gemini
-            routine = self.ai.generate_skincare_routine(
-                conditions=[condition['condition'] for condition in analysis_result['analysis']['skin_conditions']],
-                products=products,
-                user_profile=user_profile
-=======
             # Step 8: Generate actionable routine
             routine = self._generate_skincare_routine(
                 analysis_result["analysis"],
                 products,
                 user_skin_profile
->>>>>>> dd043fff8848e3dcdeb94f5e811abb74ade3030d
             )
             
             # Return comprehensive results
@@ -187,21 +157,12 @@ class ComprehensiveSkinAnalysisService:
                 },
                 "skin_profile": user_skin_profile,
                 "ai_analysis": {
-<<<<<<< HEAD
-                    "conditions_detected": [condition['condition'] for condition in analysis_result["analysis"]["skin_conditions"]],
-                    "skin_type": analysis_result["analysis"]["skin_type"]["primary"],
-                    "recommended_ingredients": analysis_result["analysis"]["recommendations"]["ingredients_to_use"],
-                    "recommended_products": analysis_result["analysis"]["recommendations"]["priority_treatments"],
-                    "full_diagnosis": analysis_result["analysis"],
-                    "model_used": "gemini-1.5-pro"
-=======
                     "conditions_detected": analysis_result["analysis"]["conditions_detected"],
                     "skin_type": analysis_result["analysis"]["skin_type"],
                     "recommended_ingredients": analysis_result["analysis"]["recommended_ingredients"],
                     "recommended_products": analysis_result["analysis"]["recommended_product_types"],
                     "full_diagnosis": analysis_result["analysis"]["full_analysis"],
                     "model_used": analysis_result["model_used"]
->>>>>>> dd043fff8848e3dcdeb94f5e811abb74ade3030d
                 },
                 "product_recommendations": products,
                 "personalized_routine": routine,
