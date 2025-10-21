@@ -7,6 +7,7 @@ from typing import Optional, Dict
 import jwt
 from datetime import datetime, timedelta
 from supabase import create_client, Client
+<<<<<<< HEAD
 from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 
 # Initialize Supabase client for auth operations
@@ -17,7 +18,6 @@ supabase_admin: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_KEY
 )
-
 # HTTP Bearer token security
 security = HTTPBearer()
 

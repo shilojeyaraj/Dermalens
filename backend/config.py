@@ -27,14 +27,22 @@ SUPABASE_URL = "https://ezlevlxkxanlceofykrh.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NzYxNTksImV4cCI6MjA3NTM1MjE1OX0.oPovEwcfN-jhHPxFOczj3RkmCX2QZICQYnfmo6hQwhg"
 SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTc3NjE1OSwiZXhwIjoyMDc1MzUyMTU5fQ.SbhkLCmjqUDA1oBWLnXVzOeoiKYriiXe7AZ6L-9C2ag"
 
+# Google Custom Search API Configuration
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyAtT3Jon9cWkbfnNLR91F9J810vvjzu8JY")
+GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "96653b7de4a3d49fe")
+GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
+
+# Google Gemini API Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCI1YRrJprS3ADJIY1U_deeFiJUTa4T_hk")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")  # gemini-1.5-pro has vision capabilities
+GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", 8000))
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
 # CORS Configuration
-# Allow all origins for development (change for production)
-ALLOWED_ORIGINS = ["*"]
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 
 # Model Configuration
 MODEL_PATH = os.getenv("MODEL_PATH", "models/skin_classifier.pth")
@@ -49,11 +57,6 @@ JWT_EXPIRATION_HOURS = 24
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 GOOGLE_WEB_SEARCH_API_KEY = os.getenv("GOOGLE_WEB_SEARCH_API_KEY", "")
 
-# Google Gemini Configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
-GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
-
 # Elasticsearch Configuration
 ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
 ELASTICSEARCH_API_KEY = os.getenv("ELASTICSEARCH_API_KEY", "")
@@ -62,19 +65,14 @@ ELASTICSEARCH_PASSWORD = os.getenv("ELASTICSEARCH_PASSWORD", "")
 ELASTICSEARCH_SSL_VERIFY = os.getenv("ELASTICSEARCH_SSL_VERIFY", "false").lower() == "true"
 
 # OpenAI Configuration (keeping for fallback)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "False").lower() == "true"
 
 # Google Custom Search API Configuration
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "")
-GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
 GOOGLE_SEARCH_MAX_RESULTS = int(os.getenv("GOOGLE_SEARCH_MAX_RESULTS", "10"))
 GOOGLE_SEARCH_SAFE_SEARCH = os.getenv("GOOGLE_SEARCH_SAFE_SEARCH", "active")
 GOOGLE_SEARCH_COUNTRY = os.getenv("GOOGLE_SEARCH_COUNTRY", "us")
 GOOGLE_SEARCH_LANGUAGE = os.getenv("GOOGLE_SEARCH_LANGUAGE", "en")
-
 # File Upload Configuration
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_FILE_TYPES = ["image/jpeg", "image/jpg", "image/png", "video/mp4"]

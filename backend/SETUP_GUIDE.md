@@ -19,6 +19,18 @@ SUPABASE_URL=https://ezlevlxkxanlceofykrh.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NzYxNTksImV4cCI6MjA3NTM1MjE1OX0.oPovEwcfN-jhHPxFOczj3RkmCX2QZICQYnfmo6hQwhg
 SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTc3NjE1OSwiZXhwIjoyMDc1MzUyMTU5fQ.SbhkLCmjqUDA1oBWLnXVzOeoiKYriiXe7AZ6L-9C2ag
 
+<<<<<<< HEAD
+=======
+# Google Custom Search API Configuration
+GOOGLE_API_KEY=your_google_api_key_here
+GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
+GOOGLE_SEARCH_ENABLED=False
+GOOGLE_SEARCH_MAX_RESULTS=10
+GOOGLE_SEARCH_SAFE_SEARCH=active
+GOOGLE_SEARCH_COUNTRY=us
+GOOGLE_SEARCH_LANGUAGE=en
+
+>>>>>>> dd043fff8848e3dcdeb94f5e811abb74ade3030d
 # JWT Configuration
 JWT_SECRET=your-jwt-secret-key-change-in-production
 JWT_ALGORITHM=HS256

@@ -107,32 +107,47 @@ class DatabaseManager:
     async def create_skin_profile(self, user_id: str, skin_data: Dict) -> Dict:
         """Create user skin profile"""
         try:
-            # For now, just return success without creating skin profile
-            # This will be implemented when the table is created
-            print(f"💾 [DATABASE] Skipping skin profile creation - table not ready")
-            return {"success": True, "data": None}
+            skin_profile_data = {
+                "user_id": user_id,
+                "skin_type": skin_data.get("skin_type"),
+                "skin_tone": skin_data.get("skin_tone"),
+                "acne_severity": skin_data.get("acne_severity"),
+                "pore_size": skin_data.get("pore_size"),
+                "sensitivity_level": skin_data.get("sensitivity_level"),
+                "primary_concerns": skin_data.get("primary_concerns", []),
+                "pre_existing_conditions": skin_data.get("pre_existing_conditions", []),
+                "allergies": skin_data.get("allergies", []),
+                "diet_type": skin_data.get("diet_type"),
+                "water_intake": skin_data.get("water_intake"),
+                "sleep_hours": skin_data.get("sleep_hours"),
+                "sun_exposure": skin_data.get("sun_exposure"),
+                "routine_frequency": skin_data.get("routine_frequency"),
+                "routine_type": skin_data.get("routine_type"),
+                "skin_goals": skin_data.get("skin_goals", []),
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).insert(skin_profile_data).execute()
+            return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
-            print(f"❌ [DATABASE] Skin profile creation failed: {str(e)}")
             return {"success": False, "error": str(e)}
     
     async def get_skin_profile(self, user_id: str) -> Dict:
         """Get user skin profile by user ID"""
         try:
-            # For now, return no skin profile
-            print(f"💾 [DATABASE] No skin profile found - table not ready")
-            return {"success": True, "data": None}
+            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).select("*").eq("user_id", user_id).execute()
+            return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
-            print(f"❌ [DATABASE] Get skin profile failed: {str(e)}")
             return {"success": False, "error": str(e)}
     
     async def update_skin_profile(self, user_id: str, updates: Dict) -> Dict:
         """Update user skin profile"""
         try:
-            # For now, just return success
-            print(f"💾 [DATABASE] Skipping skin profile update - table not ready")
-            return {"success": True, "data": None}
+            updates["updated_at"] = datetime.now().isoformat()
+            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).update(updates).eq("user_id", user_id).execute()
+            return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
-            print(f"❌ [DATABASE] Update skin profile failed: {str(e)}")
             return {"success": False, "error": str(e)}
     
     # User Images Operations

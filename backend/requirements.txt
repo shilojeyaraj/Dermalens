@@ -22,3 +22,6 @@ fivetran-sdk>=0.1.0
 google-cloud-aiplatform>=1.38.1
 google-cloud-bigquery>=3.13.0
 google-cloud-storage>=2.10.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
