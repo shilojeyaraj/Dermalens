@@ -1,3 +1,12 @@
+# Secrets and credentials
+dermalens-*.json
+**/dermalens-*.json
+*.serviceaccount.json
+*.gcloud.json
+*.credentials.json
+*.secret.json
+*.env
+*.env.*
 # Dependencies
 node_modules/
 npm-debug.log*
