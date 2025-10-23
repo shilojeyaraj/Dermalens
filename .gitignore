@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+dermalens-475816-149103e60a98.json
 # Environment variables (contains API keys - NEVER commit!)
 .env
 .env.local
