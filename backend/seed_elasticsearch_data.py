@@ -10,8 +10,14 @@ import random
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables with tolerant encoding
+try:
+    load_dotenv()
+except UnicodeDecodeError:
+    try:
+        load_dotenv(encoding="utf-16")
+    except Exception:
+        print("⚠️  Could not read .env with UTF-8/UTF-16; proceeding with existing environment variables.")
 
 def generate_sample_products(count=1000):
     """Generate realistic sample skincare products"""
@@ -112,7 +118,7 @@ def generate_sample_products(count=1000):
             "skin_conditions": product_conditions,
             "skin_types": product_skin_types,
             "url": f"https://example.com/products/{i:04d}",
-            "image_url": f"https://example.com/images/{i:04d}.jpg",
+            "image_url": f"https://picsum.photos/seed/dermalens-{i}/600/600",
             "allergen_free": allergen_free,
             "fragrance_free": fragrance_free,
             "cruelty_free": cruelty_free,
@@ -129,7 +135,11 @@ def generate_sample_products(count=1000):
 def seed_elasticsearch():
     """Seed Elasticsearch with sample data"""
     try:
-        from elasticsearch_service import elasticsearch_service
+        # Ensure we can import the shared Elasticsearch service from project root
+        PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        if PROJECT_ROOT not in sys.path:
+            sys.path.insert(0, PROJECT_ROOT)
+        from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
         
         print("🌱 Seeding Elasticsearch with sample data...")
         
@@ -185,7 +195,10 @@ def main():
     
     # Check if Elasticsearch is running
     try:
-        from elasticsearch_service import elasticsearch_service
+        PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        if PROJECT_ROOT not in sys.path:
+            sys.path.insert(0, PROJECT_ROOT)
+        from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
         elasticsearch_service.es.ping()
         print("✅ Elasticsearch connection successful")
     except Exception as e:

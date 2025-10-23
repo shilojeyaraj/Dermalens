@@ -41,6 +41,15 @@ Dermalens is a comprehensive skincare analysis platform that combines computer v
                        └─────────────────┘
 ```
 
+## 📚 **Documentation**
+
+All documentation has been organized into a comprehensive structure:
+
+- **[📋 Documentation Index](docs/INDEX.md)** - Complete documentation guide
+- **[🚀 Quick Start](docs/setup/QUICK_REFERENCE.md)** - Get started quickly
+- **[🏗️ Setup Guide](docs/api/guides/SETUP_GUIDE.md)** - Complete setup instructions
+- **[📊 System Status](docs/status/SYSTEM_STATUS_COMPLETE.md)** - Current project status
+
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**

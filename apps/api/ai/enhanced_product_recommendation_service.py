@@ -367,9 +367,15 @@ class EnhancedProductRecommendationService:
             logger.info("   - Searching Google")
             google_results = await self._search_google(needs, max_recommendations // 2)
             if google_results["success"]:
-                all_products.extend(google_results["data"])
+                # Ensure productUrl present when possible
+                cleaned = []
+                for p in google_results["data"]:
+                    if not p.get("product_url") and p.get("link"):
+                        p["product_url"] = p.get("link")
+                    cleaned.append(p)
+                all_products.extend(cleaned)
                 sources.append("google")
-                logger.info(f"   - Google: {len(google_results['data'])} products")
+                logger.info(f"   - Google: {len(cleaned)} products")
             
             # Apply budget filter if specified
             if budget_range:

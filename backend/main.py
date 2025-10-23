@@ -16,7 +16,13 @@ from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime
 import google.generativeai as genai
-from googlesearch import search
+
+# Optional Google Search placeholder (disabled by default to avoid import issues)
+def search(*args, **kwargs):
+    return []
+
+import sys
+import os
 
 # Import our custom modules
 from config import ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG, OPENAI_API_KEY, GOOGLE_WEB_SEARCH_API_KEY, GEMINI_API_KEY, GEMINI_ENABLED
@@ -49,9 +55,13 @@ face_cascade = None
 skin_model = None
 device = None
 
-# Initialize OpenAI
-if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
+# Initialize OpenAI (optional)
+try:
+    import openai
+    if OPENAI_API_KEY:
+        openai.api_key = OPENAI_API_KEY
+except Exception:
+    pass
 
 # Skin condition classes
 SKIN_CONDITIONS = [
@@ -292,7 +302,7 @@ def generate_personalized_report(user_skin_profile: Dict, analysis_results: List
     
     try:
         # Use Gemini for report generation
-        from gemini_analysis_service import get_gemini_service
+        from apps.api.ai.gemini_analysis_service import get_gemini_service
         gemini_service = get_gemini_service(GEMINI_API_KEY)
         
         # Generate report using Gemini
@@ -968,7 +978,7 @@ async def analyze_skin(
         all_products.extend(google_products)
         
         # Generate AI-powered personalized report using Gemini
-        from gemini_analysis_service import get_gemini_service
+        from apps.api.ai.gemini_analysis_service import get_gemini_service
         gemini_service = get_gemini_service(GEMINI_API_KEY)
         
         ai_report = gemini_service.generate_personalized_report(
@@ -1018,7 +1028,7 @@ async def search_products_endpoint(
 ):
     """Search for products based on skin conditions (requires authentication)"""
     try:
-        products = search_products(conditions)
+        products = await search_skincare_products(conditions)
         return {"products": products, "conditions_searched": conditions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Product search failed: {str(e)}")
@@ -1040,10 +1050,10 @@ async def generate_routine_endpoint(
 
 # Import the new comprehensive analysis service
 from comprehensive_analysis_service import ComprehensiveSkinAnalysisService
-from skin_analysis_service import skin_analysis_service
-from elasticsearch_service import elasticsearch_service
+from apps.api.ai.skin_analysis_service import skin_analysis_service
+from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
 from ingredient_database import ingredient_database
-from validation_service import validation_service
+from apps.api.infrastructure.validation_service import validation_service
 
 # Initialize the comprehensive analysis service
 comprehensive_analysis_service = ComprehensiveSkinAnalysisService()

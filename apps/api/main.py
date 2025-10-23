@@ -2,7 +2,7 @@
 Enhanced Main Application for Dermalens
 Integrates all advanced AI services including Vertex AI, streaming, ensemble models, and monitoring
 """
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request, BackgroundTasks, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.gzip import GZipMiddleware
@@ -331,6 +331,15 @@ async def analyze_skin_multi_angle(
     logger.info(f"   - User ID: {current_user_id}")
     
     try:
+        # Extra diagnostics for malformed multipart
+        content_type = request.headers.get("content-type", "")
+        logger.info(f"   - Content-Type: {content_type}")
+        try:
+            raw_body = await request.body()
+            logger.info(f"   - Raw body size: {len(raw_body)} bytes")
+        except Exception as e:
+            logger.warning(f"   - Could not read raw body for diagnostics: {e}")
+
         # Parse multipart form data
         form = await request.form()
         files = form.getlist("files")
@@ -398,6 +407,277 @@ async def analyze_skin_multi_angle(
     except Exception as e:
         logger.error(f"❌ Multi-angle analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Multi-angle analysis failed: {str(e)}")
+
+# ------------------------------
+# Profile-based recommendations
+# ------------------------------
+@app.post("/generate-profile-recommendations")
+async def generate_profile_recommendations(
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Return profile-based recommendations and a basic routine when user skips scan."""
+    logger.info("🧭 Generating profile-based recommendations (skip scan)")
+    logger.info(f"   - User ID: {current_user_id}")
+    try:
+        # Load user profile if available
+        profile_result = await db_manager.get_skin_profile(current_user_id)
+        user_profile = profile_result.get("data") if profile_result.get("success") else None
+        logger.info(f"   - User profile available: {'✅' if user_profile else '❌'}")
+
+        # Build a lightweight skin_analysis-like payload for downstream services
+        skin_analysis = {"detected_conditions": ["general_care"]}
+
+        recs = await enhanced_product_recommendation_service.get_enhanced_recommendations(
+            skin_analysis=skin_analysis,
+            user_profile=user_profile,
+            recommendation_type="profile_based",
+            max_recommendations=10,
+            budget_range=None,
+        )
+
+        if not recs.get("success"):
+            logger.error(f"❌ Profile-based recommendations failed: {recs.get('error')}")
+            raise HTTPException(status_code=500, detail=recs.get("error", "Recommendation failure"))
+
+        # Build a simple, deterministic routine from recommendations
+        routine = {
+            "morning_routine": [],
+            "evening_routine": []
+        }
+        rec_products = recs.get("recommendations", [])
+        def _pick(cat):
+            for p in rec_products:
+                cat_name = (p.get("product_type") or p.get("category") or "").lower()
+                if cat.lower() in cat_name:
+                    return p
+            return None
+        cleanser = _pick("cleanser") or (rec_products[0] if rec_products else None)
+        moisturizer = _pick("moisturizer")
+        sunscreen = _pick("sunscreen")
+        serum = _pick("serum")
+        if cleanser:
+            routine["morning_routine"].append({"name": "Cleanser", "product": cleanser.get("name"), "brand": cleanser.get("brand"), "url": cleanser.get("url") or cleanser.get("product_url"), "instructions": "Gently cleanse for 30–60 seconds."})
+        if serum:
+            routine["morning_routine"].append({"name": "Serum", "product": serum.get("name"), "brand": serum.get("brand"), "url": serum.get("url") or serum.get("product_url"), "instructions": "Apply a few drops to face and neck."})
+        if moisturizer:
+            routine["morning_routine"].append({"name": "Moisturizer", "product": moisturizer.get("name"), "brand": moisturizer.get("brand"), "url": moisturizer.get("url") or moisturizer.get("product_url"), "instructions": "Apply evenly to lock in hydration."})
+        if sunscreen:
+            routine["morning_routine"].append({"name": "Sunscreen", "product": sunscreen.get("name"), "brand": sunscreen.get("brand"), "url": sunscreen.get("url") or sunscreen.get("product_url"), "instructions": "Apply SPF 30+ as last step."})
+        if cleanser:
+            routine["evening_routine"].append({"name": "Cleanser", "product": cleanser.get("name"), "brand": cleanser.get("brand"), "url": cleanser.get("url") or cleanser.get("product_url"), "instructions": "Cleanse to remove impurities."})
+        if serum:
+            routine["evening_routine"].append({"name": "Treatment/Serum", "product": serum.get("name"), "brand": serum.get("brand"), "url": serum.get("url") or serum.get("product_url"), "instructions": "Apply treatment serum if tolerated."})
+        if moisturizer:
+            routine["evening_routine"].append({"name": "Moisturizer", "product": moisturizer.get("name"), "brand": moisturizer.get("brand"), "url": moisturizer.get("url") or moisturizer.get("product_url"), "instructions": "Apply generously."})
+
+        logger.info("✅ Profile-based recommendations generated")
+        return {**recs, "skincare_routine": routine}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Profile-based recommendations error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ------------------------------
+# Product search and trending
+# ------------------------------
+@app.get("/products/search")
+async def products_search(
+    q: Optional[str] = None,
+    limit: int = 20,
+    page: int = 1,
+    category: Optional[str] = None,
+    # Accept multiple brands via repeated params or comma-separated
+    brands: Optional[List[str]] = Query(None, alias="brands"),
+    brand: Optional[str] = None,
+    sort: Optional[str] = None,  # e.g., rating_desc, price_asc
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    skin_type: Optional[str] = None,
+    rating_min: Optional[float] = None
+):
+    """Search products with optional filters."""
+    try:
+        price_range = None
+        if min_price is not None or max_price is not None:
+            price_range = {}
+            if min_price is not None:
+                price_range["gte"] = float(min_price)
+            if max_price is not None:
+                price_range["lte"] = float(max_price)
+
+        product_types = [category] if category else None
+        skin_types = [skin_type] if skin_type else None
+
+        # Use Elasticsearch with optional brand filtering by keyword match
+        from_offset = max(0, (page - 1) * max(1, limit))
+        result = elasticsearch_service.search_products(
+            query=q or "",
+            skin_conditions=None,
+            skin_types=skin_types,
+            product_types=product_types,
+            price_range=price_range,
+            min_rating=rating_min,
+            size=limit,
+            from_=from_offset,
+        )
+        # Post-filter by brands when requested
+        brand_filters: List[str] = []
+        if brands:
+            for b in brands:
+                if isinstance(b, str):
+                    brand_filters.extend([s.strip() for s in b.split(",") if s.strip()])
+        elif brand:
+            brand_filters = [brand]
+        if brand_filters and result.get("success"):
+            requested_set = {b.lower() for b in brand_filters}
+            result["products"] = [
+                p for p in result.get("products", [])
+                if p.get("brand", "").lower() in requested_set or any(rb in p.get("brand", "").lower() for rb in requested_set)
+            ]
+        # Optional sorting
+        if sort and result.get("success"):
+            key, _, order = sort.partition("_")
+            reverse = (order or "desc").lower() == "desc"
+            def _key_fn(p):
+                if key == "rating":
+                    return p.get("rating", 0)
+                if key == "price":
+                    return p.get("price", 0)
+                if key == "reviews":
+                    return p.get("review_count", 0)
+                return p.get("_score", 0)
+            result["products"] = sorted(result.get("products", []), key=_key_fn, reverse=reverse)
+        
+        # Normalize field names to frontend expectations (camelCase)
+        def _map_product(p):
+            price_val = p.get("price")
+            try:
+                price_str = f"${float(price_val):.2f}" if price_val is not None else ""
+            except Exception:
+                price_str = str(price_val) if price_val is not None else ""
+            ingredients = p.get("ingredients")
+            if isinstance(ingredients, str):
+                ingredients_list = [s.strip() for s in ingredients.split(",") if s.strip()]
+            else:
+                ingredients_list = list(ingredients or [])
+            skin_types_val = p.get("skin_types")
+            skin_type = ", ".join(skin_types_val) if isinstance(skin_types_val, list) else (p.get("skin_type") or "All Skin Types")
+            image_url = p.get("image_url") or p.get("imageUrl") or "/skincarelogo.jpeg"
+            return {
+                "name": p.get("name", ""),
+                "brand": p.get("brand", ""),
+                "price": price_str,
+                "category": p.get("product_type") or p.get("category", ""),
+                "description": p.get("description", ""),
+                "rating": p.get("rating", 4.2),
+                "reviewCount": p.get("review_count", 0),
+                "imageUrl": image_url,
+                "productUrl": p.get("url", ""),
+                "source": p.get("source", p.get("brand", "")),
+                "inStock": True,
+                "size": p.get("size", "100ml"),
+                "ingredients": ingredients_list,
+                "skinType": skin_type,
+                "keyBenefits": p.get("key_benefits", []),
+            }
+        if result.get("success"):
+            result["products"] = [_map_product(p) for p in result.get("products", [])]
+        return result
+    except Exception as e:
+        logger.error(f"❌ /products/search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/products/trending")
+async def products_trending(
+    limit: int = 12
+):
+    """Return a simple set of trending products from Elasticsearch by rating/reviews."""
+    try:
+        data = elasticsearch_service.search_products(
+            query="",
+            skin_conditions=None,
+            skin_types=None,
+            product_types=None,
+            price_range=None,
+            min_rating=4.2,
+            size=limit,
+        )
+        products = data.get("products", []) if data.get("success") else []
+        # Normalize like above
+        def _map_product(p):
+            price_val = p.get("price")
+            try:
+                price_str = f"${float(price_val):.2f}" if price_val is not None else ""
+            except Exception:
+                price_str = str(price_val) if price_val is not None else ""
+            ingredients = p.get("ingredients")
+            if isinstance(ingredients, str):
+                ingredients_list = [s.strip() for s in ingredients.split(",") if s.strip()]
+            else:
+                ingredients_list = list(ingredients or [])
+            skin_types_val = p.get("skin_types")
+            skin_type = ", ".join(skin_types_val) if isinstance(skin_types_val, list) else (p.get("skin_type") or "All Skin Types")
+            return {
+                "name": p.get("name", ""),
+                "brand": p.get("brand", ""),
+                "price": price_str,
+                "category": p.get("product_type") or p.get("category", ""),
+                "description": p.get("description", ""),
+                "rating": p.get("rating", 4.2),
+                "reviewCount": p.get("review_count", 0),
+                "imageUrl": p.get("image_url", ""),
+                "productUrl": p.get("url", ""),
+                "source": p.get("source", p.get("brand", "")),
+                "inStock": True,
+                "size": p.get("size", "100ml"),
+                "ingredients": ingredients_list,
+                "skinType": skin_type,
+                "keyBenefits": p.get("key_benefits", []),
+            }
+        mapped = [_map_product(p) for p in products]
+        # Fallback sample products if index empty
+        if not mapped:
+            mapped = [
+                {
+                    "name": "Gentle Daily Cleanser",
+                    "brand": "CeraVe",
+                    "price": "$15.99",
+                    "category": "Cleanser",
+                    "description": "Hydrating cleanser suitable for all skin types.",
+                    "rating": 4.6,
+                    "reviewCount": 1200,
+                    "imageUrl": "",
+                    "productUrl": "",
+                    "source": "demo",
+                    "inStock": True,
+                    "size": "236ml",
+                    "ingredients": ["Hyaluronic Acid", "Ceramides"],
+                    "skinType": "All Skin Types",
+                    "keyBenefits": ["Hydrates", "Gentle"],
+                },
+                {
+                    "name": "Hydrating Moisturizer",
+                    "brand": "Neutrogena",
+                    "price": "$22.50",
+                    "category": "Moisturizer",
+                    "description": "Lightweight daily moisturizer.",
+                    "rating": 4.5,
+                    "reviewCount": 980,
+                    "imageUrl": "",
+                    "productUrl": "",
+                    "source": "demo",
+                    "inStock": True,
+                    "size": "50ml",
+                    "ingredients": ["Glycerin", "Hyaluronic Acid"],
+                    "skinType": "All Skin Types",
+                    "keyBenefits": ["Hydrates", "Non‑greasy"],
+                },
+            ]
+        return {"success": True, "trending_products": mapped, "total": len(mapped)}
+    except Exception as e:
+        logger.error(f"❌ /products/trending failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Comprehensive analysis endpoint with enhanced logging
 @app.post("/analyze-comprehensive-enhanced")

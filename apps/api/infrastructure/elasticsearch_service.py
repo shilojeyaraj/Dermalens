@@ -2,6 +2,7 @@
 Elasticsearch service for intelligent product search and recommendations
 """
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk as es_bulk
 from typing import Dict, List, Any, Optional
 import logging
 import json
@@ -161,31 +162,27 @@ class ElasticsearchProductService:
             raise
     
     def bulk_index_products(self, products: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Bulk index multiple products"""
+        """Bulk index multiple products using helpers.bulk to build proper actions."""
         try:
             actions = []
             for product in products:
                 product_id = product.get("id", f"{product['brand']}_{product['name']}".lower().replace(" ", "_"))
                 product["created_at"] = datetime.now().isoformat()
                 product["updated_at"] = datetime.now().isoformat()
-                
-                action = {
+
+                actions.append({
+                    "_op_type": "index",
                     "_index": self.index_name,
                     "_id": product_id,
-                    "_source": product
-                }
-                actions.append(action)
-            
-            response = self.es.bulk(body=actions)
-            
-            # Check for errors
-            errors = [item for item in response["items"] if "error" in item]
+                    "_source": product,
+                })
+
+            indexed, errors = es_bulk(self.es, actions, stats_only=False, raise_on_error=False)
             if errors:
-                logger.error(f"Bulk indexing errors: {errors}")
-            
-            logger.info(f"Bulk indexed {len(products)} products")
-            return response
-            
+                logger.error(f"Bulk indexing had errors: {errors}")
+            logger.info(f"Bulk indexed {indexed} products")
+            return {"success": True, "indexed": indexed, "errors": errors}
+
         except Exception as e:
             logger.error(f"Error in bulk indexing: {e}")
             raise
