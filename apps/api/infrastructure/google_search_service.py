@@ -5,7 +5,12 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from typing import List, Dict, Optional, Any
 import logging
-from config import (
+import sys
+import os
+
+# Add packages/config to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import (
     GOOGLE_API_KEY,
     GOOGLE_SEARCH_ENGINE_ID,
     GOOGLE_SEARCH_ENABLED,

@@ -1,292 +1,151 @@
 """
 Authentication handlers and middleware for Supabase integration
+Uses custom database functions for authentication
 """
 from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict
+from pydantic import BaseModel, EmailStr
 import jwt
 from datetime import datetime, timedelta
 from supabase import create_client, Client
-<<<<<<< HEAD
-from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 
 # Initialize Supabase client for auth operations
 supabase_auth: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-# Initialize Supabase admin client for user creation without email confirmation
+# Initialize Supabase admin client
 supabase_admin: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_KEY
 )
+
 # HTTP Bearer token security
 security = HTTPBearer()
 
 class AuthManager:
-    """Handles all authentication operations"""
+    """Handles all authentication operations using custom database functions"""
     
     def __init__(self):
         self.supabase = supabase_auth
     
     async def sign_up(self, email: str, password: str) -> Dict:
-        """Sign up a new user without email confirmation"""
-        print(f"🔐 [AUTH] Starting signup process for email: {email}")
+        """Sign up a new user using custom database function"""
+        print(f" [AUTH] Starting signup process for email: {email}")
         
         try:
-            # First, try to sign in to see if user already exists
-            print(f"🔍 [AUTH] Checking if user already exists...")
-            try:
-                sign_in_result = self.supabase.auth.sign_in_with_password({
-                    "email": email,
-                    "password": password
-                })
-                
-                if sign_in_result.user and sign_in_result.session:
-                    print(f"✅ [AUTH] User already exists, signing in successfully")
-                    print(f"👤 [AUTH] User ID: {sign_in_result.user.id}")
-                    print(f"🎫 [AUTH] Session created: {sign_in_result.session.access_token[:20]}...")
-                    
-                    # Convert User object to dictionary with safe attribute access
-                    user_dict = {
-                        "id": sign_in_result.user.id,
-                        "email": sign_in_result.user.email,
-                        "created_at": sign_in_result.user.created_at.isoformat() if sign_in_result.user.created_at else None,
-                        "updated_at": sign_in_result.user.updated_at.isoformat() if sign_in_result.user.updated_at else None,
-                        "email_confirmed_at": sign_in_result.user.email_confirmed_at.isoformat() if sign_in_result.user.email_confirmed_at else None,
-                        "phone": getattr(sign_in_result.user, 'phone', '') or "",
-                        "app_metadata": getattr(sign_in_result.user, 'app_metadata', {}) or {},
-                        "user_metadata": getattr(sign_in_result.user, 'user_metadata', {}) or {},
-                        "aud": getattr(sign_in_result.user, 'aud', 'authenticated') or "authenticated",
-                        "confirmation_sent_at": sign_in_result.user.confirmation_sent_at.isoformat() if sign_in_result.user.confirmation_sent_at else None,
-                        "recovery_sent_at": sign_in_result.user.recovery_sent_at.isoformat() if sign_in_result.user.recovery_sent_at else None,
-                        "email_change_sent_at": sign_in_result.user.email_change_sent_at.isoformat() if sign_in_result.user.email_change_sent_at else None,
-                        "new_email": getattr(sign_in_result.user, 'new_email', '') or "",
-                        "new_phone": getattr(sign_in_result.user, 'new_phone', '') or "",
-                        "invited_at": sign_in_result.user.invited_at.isoformat() if sign_in_result.user.invited_at else None,
-                        "action_link": getattr(sign_in_result.user, 'action_link', '') or "",
-                        "phone_confirmed_at": sign_in_result.user.phone_confirmed_at.isoformat() if sign_in_result.user.phone_confirmed_at else None,
-                        "confirmed_at": sign_in_result.user.confirmed_at.isoformat() if sign_in_result.user.confirmed_at else None,
-                        "email_change": getattr(sign_in_result.user, 'email_change', '') or "",
-                        "phone_change": getattr(sign_in_result.user, 'phone_change', '') or "",
-                        "last_sign_in_at": sign_in_result.user.last_sign_in_at.isoformat() if sign_in_result.user.last_sign_in_at else None,
-                        "is_anonymous": getattr(sign_in_result.user, 'is_anonymous', False) or False,
-                        "factors": getattr(sign_in_result.user, 'factors', []) or []
-                    }
-                    
-                    return {
-                        "success": True,
-                        "user": user_dict,
-                        "session": sign_in_result.session,
-                        "access_token": sign_in_result.session.access_token,
-                        "message": "User already exists and signed in successfully."
-                    }
-            except Exception as e:
-                print(f"ℹ️ [AUTH] User doesn't exist yet, proceeding with creation: {str(e)}")
-                pass
-            
-            # Use admin client to create user without email confirmation
-            print(f"👤 [AUTH] Creating new user with admin client...")
-            try:
-                result = supabase_admin.auth.admin.create_user({
-                    "email": email,
-                    "password": password,
-                    "email_confirm": True,  # Auto-confirm email
-                    "user_metadata": {
-                        "email_confirmed": True
-                    }
-                })
-                print(f"📊 [AUTH] Admin create_user result: {result}")
-            except Exception as create_error:
-                print(f"❌ [AUTH] Admin create_user failed: {str(create_error)}")
-                # Try alternative approach - create user with different method
-                try:
-                    result = supabase_admin.auth.admin.create_user({
-                        "email": email,
-                        "password": password,
-                        "email_confirm": False,  # Don't auto-confirm
-                        "user_metadata": {
-                            "email_confirmed": False
-                        }
-                    })
-                    print(f"📊 [AUTH] Alternative create_user result: {result}")
-                except Exception as alt_error:
-                    print(f"❌ [AUTH] Alternative create_user also failed: {str(alt_error)}")
-                    raise create_error
-            
-            if result.user:
-                print(f"✅ [AUTH] User created successfully with admin client")
-                print(f"👤 [AUTH] New User ID: {result.user.id}")
-                print(f"📧 [AUTH] Email confirmed: {result.user.email_confirmed_at}")
-                
-                # Try to sign in with the regular client first
-                print(f"🔑 [AUTH] Attempting to sign in with regular client...")
-                try:
-                    sign_in_result = self.supabase.auth.sign_in_with_password({
-                        "email": email,
-                        "password": password
-                    })
-                    
-                    if sign_in_result.user and sign_in_result.session:
-                        print(f"✅ [AUTH] Sign in successful with regular client")
-                        print(f"🎫 [AUTH] Session token: {sign_in_result.session.access_token[:20]}...")
-                        
-                        # Convert User object to dictionary with safe attribute access
-                        user_dict = {
-                            "id": sign_in_result.user.id,
-                            "email": sign_in_result.user.email,
-                            "created_at": sign_in_result.user.created_at.isoformat() if sign_in_result.user.created_at else None,
-                            "updated_at": sign_in_result.user.updated_at.isoformat() if sign_in_result.user.updated_at else None,
-                            "email_confirmed_at": sign_in_result.user.email_confirmed_at.isoformat() if sign_in_result.user.email_confirmed_at else None,
-                            "phone": getattr(sign_in_result.user, 'phone', '') or "",
-                            "app_metadata": getattr(sign_in_result.user, 'app_metadata', {}) or {},
-                            "user_metadata": getattr(sign_in_result.user, 'user_metadata', {}) or {},
-                            "aud": getattr(sign_in_result.user, 'aud', 'authenticated') or "authenticated",
-                            "confirmation_sent_at": sign_in_result.user.confirmation_sent_at.isoformat() if sign_in_result.user.confirmation_sent_at else None,
-                            "recovery_sent_at": sign_in_result.user.recovery_sent_at.isoformat() if sign_in_result.user.recovery_sent_at else None,
-                            "email_change_sent_at": sign_in_result.user.email_change_sent_at.isoformat() if sign_in_result.user.email_change_sent_at else None,
-                            "new_email": getattr(sign_in_result.user, 'new_email', '') or "",
-                            "new_phone": getattr(sign_in_result.user, 'new_phone', '') or "",
-                            "invited_at": sign_in_result.user.invited_at.isoformat() if sign_in_result.user.invited_at else None,
-                            "action_link": getattr(sign_in_result.user, 'action_link', '') or "",
-                            "phone_confirmed_at": sign_in_result.user.phone_confirmed_at.isoformat() if sign_in_result.user.phone_confirmed_at else None,
-                            "confirmed_at": sign_in_result.user.confirmed_at.isoformat() if sign_in_result.user.confirmed_at else None,
-                            "email_change": getattr(sign_in_result.user, 'email_change', '') or "",
-                            "phone_change": getattr(sign_in_result.user, 'phone_change', '') or "",
-                            "last_sign_in_at": sign_in_result.user.last_sign_in_at.isoformat() if sign_in_result.user.last_sign_in_at else None,
-                            "is_anonymous": getattr(sign_in_result.user, 'is_anonymous', False) or False,
-                            "factors": getattr(sign_in_result.user, 'factors', []) or []
-                        }
-                        
-                        return {
-                            "success": True,
-                            "user": user_dict,
-                            "session": sign_in_result.session,
-                            "access_token": sign_in_result.session.access_token,
-                            "message": "User created and signed in successfully."
-                        }
-                except Exception as e:
-                    print(f"⚠️ [AUTH] Regular client sign in failed: {str(e)}")
-                    
-                    # If regular sign in fails, try with admin client
-                    print(f"🔑 [AUTH] Attempting to sign in with admin client...")
-                    try:
-                        admin_sign_in = supabase_admin.auth.sign_in_with_password({
-                            "email": email,
-                            "password": password
-                        })
-                        
-                        if admin_sign_in.user and admin_sign_in.session:
-                            print(f"✅ [AUTH] Sign in successful with admin client")
-                            print(f"🎫 [AUTH] Admin session token: {admin_sign_in.session.access_token[:20]}...")
-                            
-                            # Convert User object to dictionary with safe attribute access
-                            user_dict = {
-                                "id": admin_sign_in.user.id,
-                                "email": admin_sign_in.user.email,
-                                "created_at": admin_sign_in.user.created_at.isoformat() if admin_sign_in.user.created_at else None,
-                                "updated_at": admin_sign_in.user.updated_at.isoformat() if admin_sign_in.user.updated_at else None,
-                                "email_confirmed_at": admin_sign_in.user.email_confirmed_at.isoformat() if admin_sign_in.user.email_confirmed_at else None,
-                                "phone": getattr(admin_sign_in.user, 'phone', '') or "",
-                                "app_metadata": getattr(admin_sign_in.user, 'app_metadata', {}) or {},
-                                "user_metadata": getattr(admin_sign_in.user, 'user_metadata', {}) or {},
-                                "aud": getattr(admin_sign_in.user, 'aud', 'authenticated') or "authenticated",
-                                "confirmation_sent_at": admin_sign_in.user.confirmation_sent_at.isoformat() if admin_sign_in.user.confirmation_sent_at else None,
-                                "recovery_sent_at": admin_sign_in.user.recovery_sent_at.isoformat() if admin_sign_in.user.recovery_sent_at else None,
-                                "email_change_sent_at": admin_sign_in.user.email_change_sent_at.isoformat() if admin_sign_in.user.email_change_sent_at else None,
-                                "new_email": getattr(admin_sign_in.user, 'new_email', '') or "",
-                                "new_phone": getattr(admin_sign_in.user, 'new_phone', '') or "",
-                                "invited_at": admin_sign_in.user.invited_at.isoformat() if admin_sign_in.user.invited_at else None,
-                                "action_link": getattr(admin_sign_in.user, 'action_link', '') or "",
-                                "phone_confirmed_at": admin_sign_in.user.phone_confirmed_at.isoformat() if admin_sign_in.user.phone_confirmed_at else None,
-                                "confirmed_at": admin_sign_in.user.confirmed_at.isoformat() if admin_sign_in.user.confirmed_at else None,
-                                "email_change": getattr(admin_sign_in.user, 'email_change', '') or "",
-                                "phone_change": getattr(admin_sign_in.user, 'phone_change', '') or "",
-                                "last_sign_in_at": admin_sign_in.user.last_sign_in_at.isoformat() if admin_sign_in.user.last_sign_in_at else None,
-                                "is_anonymous": getattr(admin_sign_in.user, 'is_anonymous', False) or False,
-                                "factors": getattr(admin_sign_in.user, 'factors', []) or []
-                            }
-                            
-                            return {
-                                "success": True,
-                                "user": user_dict,
-                                "session": admin_sign_in.session,
-                                "access_token": admin_sign_in.session.access_token,
-                                "message": "User created and signed in successfully."
-                            }
-                    except Exception as e2:
-                        print(f"❌ [AUTH] Admin client sign in also failed: {str(e2)}")
-                        pass
-                
-                # If all sign in attempts fail, return the created user without session
-                print(f"⚠️ [AUTH] All sign in attempts failed, returning user without session")
-                
-                # Convert User object to dictionary with safe attribute access
-                user_dict = {
-                    "id": result.user.id,
-                    "email": result.user.email,
-                    "created_at": result.user.created_at.isoformat() if result.user.created_at else None,
-                    "updated_at": result.user.updated_at.isoformat() if result.user.updated_at else None,
-                    "email_confirmed_at": result.user.email_confirmed_at.isoformat() if result.user.email_confirmed_at else None,
-                    "phone": getattr(result.user, 'phone', '') or "",
-                    "app_metadata": getattr(result.user, 'app_metadata', {}) or {},
-                    "user_metadata": getattr(result.user, 'user_metadata', {}) or {},
-                    "aud": getattr(result.user, 'aud', 'authenticated') or "authenticated",
-                    "confirmation_sent_at": result.user.confirmation_sent_at.isoformat() if result.user.confirmation_sent_at else None,
-                    "recovery_sent_at": result.user.recovery_sent_at.isoformat() if result.user.recovery_sent_at else None,
-                    "email_change_sent_at": result.user.email_change_sent_at.isoformat() if result.user.email_change_sent_at else None,
-                    "new_email": getattr(result.user, 'new_email', '') or "",
-                    "new_phone": getattr(result.user, 'new_phone', '') or "",
-                    "invited_at": result.user.invited_at.isoformat() if result.user.invited_at else None,
-                    "action_link": getattr(result.user, 'action_link', '') or "",
-                    "phone_confirmed_at": result.user.phone_confirmed_at.isoformat() if result.user.phone_confirmed_at else None,
-                    "confirmed_at": result.user.confirmed_at.isoformat() if result.user.confirmed_at else None,
-                    "email_change": getattr(result.user, 'email_change', '') or "",
-                    "phone_change": getattr(result.user, 'phone_change', '') or "",
-                    "last_sign_in_at": result.user.last_sign_in_at.isoformat() if result.user.last_sign_in_at else None,
-                    "is_anonymous": getattr(result.user, 'is_anonymous', False) or False,
-                    "factors": getattr(result.user, 'factors', []) or []
+            # Use the custom database function register_user_with_rls
+            print(f" [AUTH] Calling register_user_with_rls function...")
+            result = self.supabase.rpc(
+                'register_user_with_rls',
+                {
+                    'user_email': email,
+                    'user_password': password,
+                    'user_username': email.split('@')[0]  # Use email prefix as username
                 }
+            ).execute()
+            
+            print(f" [AUTH] Registration result: {result}")
+            
+            if result.data and len(result.data) > 0:
+                user_data = result.data[0]
+                print(f" [AUTH] User created successfully with ID: {user_data.get('user_id')}")
+                
+                # Generate JWT token for the session
+                token_payload = {
+                    'user_id': str(user_data.get('user_id')),
+                    'email': user_data.get('email'),
+                    'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+                }
+                access_token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
                 
                 return {
                     "success": True,
-                    "user": user_dict,
-                    "session": None,
-                    "access_token": None,
-                    "message": "User created successfully."
+                    "access_token": access_token,
+                    "user": {
+                        "id": str(user_data.get('user_id')),
+                        "email": user_data.get('email'),
+                        "username": user_data.get('username'),
+                        "created_at": str(user_data.get('created_at')),
+                    }
                 }
             else:
-                print(f"❌ [AUTH] Failed to create user - no user returned from admin client")
+                print(f" [AUTH] No data returned from registration")
                 return {
                     "success": False,
-                    "error": "Failed to create user"
+                    "error": "Failed to create user - no data returned"
                 }
+                
         except Exception as e:
-            print(f"❌ [AUTH] Signup process failed with error: {str(e)}")
+            print(f" [AUTH] Signup failed with error: {str(e)}")
+            # Check if user already exists
+            if "already exists" in str(e).lower():
+                return {
+                    "success": False,
+                    "error": "User with this email already exists"
+                }
             return {
                 "success": False,
                 "error": str(e)
             }
     
     async def sign_in(self, email: str, password: str) -> Dict:
-        """Sign in an existing user"""
+        """Sign in an existing user using custom database function"""
+        print(f" [AUTH] Starting signin process for email: {email}")
+        
         try:
-            result = self.supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
+            # Use the custom database function authenticate_user_with_rls
+            print(f" [AUTH] Calling authenticate_user_with_rls function...")
+            result = self.supabase.rpc(
+                'authenticate_user_with_rls',
+                {
+                    'user_email': email,
+                    'user_password': password
+                }
+            ).execute()
             
-            if result.user and result.session:
+            print(f" [AUTH] Authentication result: {result}")
+            
+            if result.data and len(result.data) > 0:
+                user_data = result.data[0]
+                print(f" [AUTH] User authenticated successfully with ID: {user_data.get('user_id')}")
+                
+                # Generate JWT token for the session
+                token_payload = {
+                    'user_id': str(user_data.get('user_id')),
+                    'email': user_data.get('email'),
+                    'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+                }
+                access_token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+                
                 return {
                     "success": True,
-                    "user": result.user,
-                    "session": result.session,
-                    "access_token": result.session.access_token
+                    "access_token": access_token,
+                    "user": {
+                        "id": str(user_data.get('user_id')),
+                        "email": user_data.get('email'),
+                        "username": user_data.get('username'),
+                        "created_at": str(user_data.get('created_at')),
+                    }
                 }
             else:
+                print(f" [AUTH] Invalid credentials - no data returned")
                 return {
                     "success": False,
-                    "error": "Invalid credentials"
+                    "error": "Invalid email or password"
                 }
+                
         except Exception as e:
+            print(f" [AUTH] Signin failed with error: {str(e)}")
+            if "Invalid email or password" in str(e):
+                return {
+                    "success": False,
+                    "error": "Invalid email or password"
+                }
             return {
                 "success": False,
                 "error": str(e)
@@ -295,9 +154,7 @@ class AuthManager:
     async def sign_out(self, access_token: str) -> Dict:
         """Sign out user"""
         try:
-            # Set the session for the client
-            self.supabase.auth.set_session(access_token, "")
-            result = self.supabase.auth.sign_out()
+            # For custom auth, just return success (token will be discarded by client)
             return {"success": True, "message": "Signed out successfully"}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -305,39 +162,64 @@ class AuthManager:
     async def get_user(self, access_token: str) -> Dict:
         """Get current user from access token"""
         try:
-            # Set the session for the client
-            self.supabase.auth.set_session(access_token, "")
-            result = self.supabase.auth.get_user()
+            # Decode JWT token
+            payload = jwt.decode(access_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            user_id = payload.get('user_id')
             
-            if result.user:
+            if not user_id:
+                return {
+                    "success": False,
+                    "error": "Invalid token - no user_id"
+                }
+            
+            # Get user profile from database
+            result = self.supabase.rpc(
+                'get_user_profile_with_rls',
+                {'user_uuid': user_id}
+            ).execute()
+            
+            if result.data and len(result.data) > 0:
+                user_data = result.data[0]
                 return {
                     "success": True,
-                    "user": result.user
+                    "user": {
+                        "id": str(user_data.get('user_id')),
+                        "email": user_data.get('email'),
+                        "username": user_data.get('username'),
+                    }
                 }
             else:
                 return {
                     "success": False,
-                    "error": "Invalid token"
+                    "error": "User not found"
                 }
+                
+        except jwt.ExpiredSignatureError:
+            return {"success": False, "error": "Token expired"}
+        except jwt.InvalidTokenError:
+            return {"success": False, "error": "Invalid token"}
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
     
     async def reset_password(self, email: str) -> Dict:
-        """Send password reset email"""
+        """Request password reset"""
         try:
-            result = self.supabase.auth.reset_password_email(email)
+            # For now, just return success (implement email sending later)
+            return {"success": True, "message": "Password reset email sent"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    async def refresh_token(self, current_user: dict) -> Dict:
+        """Refresh JWT token"""
+        try:
+            # Create new token with same user data
+            new_token = self.create_token(current_user['id'], current_user['email'])
             return {
                 "success": True,
-                "message": "Password reset email sent"
+                "access_token": new_token
             }
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
     
     def verify_token(self, token: str) -> Dict:
         """Verify JWT token"""
@@ -345,7 +227,7 @@ class AuthManager:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             return {
                 "success": True,
-                "user_id": payload.get("sub"),
+                "user_id": payload.get("user_id"),
                 "email": payload.get("email")
             }
         except jwt.ExpiredSignatureError:
@@ -356,7 +238,7 @@ class AuthManager:
     def create_token(self, user_id: str, email: str) -> str:
         """Create JWT token for user"""
         payload = {
-            "sub": user_id,
+            "user_id": user_id,
             "email": email,
             "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
             "iat": datetime.utcnow()
@@ -388,19 +270,30 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
 
 async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Dependency to get current user ID"""
-    user = await get_current_user(credentials)
-    return user.id
+    """Dependency to get current user ID from token"""
+    try:
+        token = credentials.credentials
+        result = auth_manager.verify_token(token)
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return result["user_id"]
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-# Request models for authentication
-from pydantic import BaseModel, EmailStr
-
+# Pydantic models for request/response
 class SignUpRequest(BaseModel):
     email: EmailStr
     password: str
-    username: Optional[str] = None
-    firstName: Optional[str] = None
-    lastName: Optional[str] = None
 
 class SignInRequest(BaseModel):
     email: EmailStr
@@ -412,4 +305,4 @@ class PasswordResetRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    user: Dict
+

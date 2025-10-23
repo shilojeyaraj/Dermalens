@@ -13,7 +13,10 @@ class ElasticsearchProductService:
     """Elasticsearch service for skincare product search and recommendations"""
     
     def __init__(self, elasticsearch_url: str = None):
-        from config import ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD, ELASTICSEARCH_SSL_VERIFY
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+        from settings import ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD, ELASTICSEARCH_SSL_VERIFY
         
         # Use environment variables if not provided
         if elasticsearch_url is None:

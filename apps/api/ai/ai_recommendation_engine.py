@@ -10,15 +10,18 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
 import math
+import sys
+import os
 
 # Import services
-from elasticsearch_service import elasticsearch_service
-from google_search_service import google_search_service
-from intelligent_caching_service import intelligent_caching_service
-from vertex_ai_service import vertex_ai_service
+from infrastructure.elasticsearch_service import elasticsearch_service
+from infrastructure.google_search_service import google_search_service
+from infrastructure.caching import intelligent_caching_service
+from ai.vertex_ai_service import vertex_ai_service
 
 # Configuration
-from config import (
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import (
     VERTEX_AI_ENABLED, ENSEMBLE_ENABLED, PERFORMANCE_MONITORING_ENABLED
 )
 

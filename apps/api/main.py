@@ -10,25 +10,30 @@ import uvicorn
 import asyncio
 import time
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import json
 
 # Import enhanced services
-from vertex_ai_service import vertex_ai_service
-from enhanced_comprehensive_analysis_service import enhanced_comprehensive_analysis_service
-from intelligent_caching_service import intelligent_caching_service
-from ai_recommendation_engine import ai_recommendation_engine
-from performance_monitoring_service import performance_monitoring_service
+from ai.vertex_ai_service import vertex_ai_service
+from ai.enhanced_comprehensive_analysis_service import enhanced_comprehensive_analysis_service
+from ai.enhanced_skin_analysis_service_simple import enhanced_skin_analysis_service
+from ai.enhanced_product_recommendation_service import enhanced_product_recommendation_service
+from infrastructure.caching import intelligent_caching_service
+from ai.ai_recommendation_engine import ai_recommendation_engine
+from monitoring.performance import performance_monitoring_service
 
 # Import existing services
-from database import db_manager, UserProfileCreate, UserProfileUpdate, SkinProfileCreate, SkinProfileUpdate, UserImageCreate
-from auth import auth_manager, get_current_user, get_current_user_id, SignUpRequest, SignInRequest, PasswordResetRequest, TokenResponse
-from elasticsearch_service import elasticsearch_service
-from google_search_service import google_search_service
+from database.connection import db_manager, UserProfileCreate, UserProfileUpdate, SkinProfileCreate, SkinProfileUpdate, UserImageCreate
+from core.auth import auth_manager, get_current_user, get_current_user_id, SignUpRequest, SignInRequest, PasswordResetRequest, TokenResponse
+from infrastructure.elasticsearch_service import elasticsearch_service
+from infrastructure.google_search_service import google_search_service
 
 # Import configuration
-from config import (
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'config'))
+from settings import (
     ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG, 
     VERTEX_AI_ENABLED, VERTEX_AI_STREAMING_ENABLED, ENSEMBLE_ENABLED,
     PERFORMANCE_MONITORING_ENABLED
@@ -193,6 +198,289 @@ async def analyze_skin_enhanced(
             )
         
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+# Enhanced skin analysis with detailed logging
+@app.post("/analyze-skin-enhanced")
+async def analyze_skin_enhanced_detailed(
+    file: UploadFile = File(...),
+    analysis_type: str = "comprehensive",
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """
+    Enhanced skin analysis with comprehensive logging and detailed results
+    
+    Features:
+    - Multi-modal analysis (visual + text)
+    - Real-time processing
+    - Comprehensive logging
+    - Error handling and fallbacks
+    - Detailed analysis reports
+    """
+    logger.info("🔬 Starting enhanced skin analysis")
+    logger.info(f"   - User ID: {current_user_id}")
+    logger.info(f"   - Analysis type: {analysis_type}")
+    logger.info(f"   - File: {file.filename}")
+    
+    try:
+        # Read file content
+        content = await file.read()
+        logger.info(f"   - File size: {len(content)} bytes")
+        
+        # Validate file
+        if len(content) == 0:
+            logger.error("❌ Empty file uploaded")
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        
+        # Get user profile for enhanced analysis
+        logger.info("👤 Fetching user profile for enhanced analysis")
+        user_profile_result = await db_manager.get_skin_profile(current_user_id)
+        user_profile = user_profile_result.get("data") if user_profile_result.get("success") else None
+        logger.info(f"   - User profile: {'✅' if user_profile else '❌'}")
+        
+        # Perform enhanced skin analysis
+        logger.info("🔬 Performing enhanced skin analysis")
+        analysis_result = await enhanced_skin_analysis_service.analyze_skin_image(
+            image_data=content,
+            user_profile=user_profile,
+            analysis_type=analysis_type
+        )
+        
+        if not analysis_result["success"]:
+            logger.error(f"❌ Enhanced analysis failed: {analysis_result['error']}")
+            raise HTTPException(status_code=500, detail=analysis_result["error"])
+        
+        logger.info("✅ Enhanced skin analysis completed successfully")
+        return analysis_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Enhanced skin analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enhanced analysis failed: {str(e)}")
+
+# Enhanced product recommendations with detailed logging
+@app.post("/recommendations-enhanced")
+async def get_enhanced_recommendations(
+    skin_analysis: Dict[str, Any],
+    recommendation_type: str = "comprehensive",
+    max_recommendations: int = 10,
+    budget_range: Optional[Tuple[float, float]] = None,
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """
+    Enhanced AI-powered product recommendations with comprehensive logging
+    
+    Features:
+    - Multi-strategy recommendations
+    - Real-time personalization
+    - Comprehensive logging
+    - A/B testing support
+    - Performance optimization
+    - Detailed product analysis
+    """
+    logger.info("🛍️ Starting enhanced product recommendations")
+    logger.info(f"   - User ID: {current_user_id}")
+    logger.info(f"   - Recommendation type: {recommendation_type}")
+    logger.info(f"   - Max recommendations: {max_recommendations}")
+    logger.info(f"   - Budget range: {budget_range}")
+    
+    try:
+        # Get user profile for enhanced recommendations
+        logger.info("👤 Fetching user profile for enhanced recommendations")
+        user_profile_result = await db_manager.get_skin_profile(current_user_id)
+        user_profile = user_profile_result.get("data") if user_profile_result.get("success") else None
+        logger.info(f"   - User profile: {'✅' if user_profile else '❌'}")
+        
+        # Perform enhanced product recommendations
+        logger.info("🛍️ Performing enhanced product recommendations")
+        recommendations_result = await enhanced_product_recommendation_service.get_enhanced_recommendations(
+            skin_analysis=skin_analysis,
+            user_profile=user_profile,
+            recommendation_type=recommendation_type,
+            max_recommendations=max_recommendations,
+            budget_range=budget_range
+        )
+        
+        if not recommendations_result["success"]:
+            logger.error(f"❌ Enhanced recommendations failed: {recommendations_result['error']}")
+            raise HTTPException(status_code=500, detail=recommendations_result["error"])
+        
+        logger.info("✅ Enhanced product recommendations completed successfully")
+        return recommendations_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Enhanced product recommendations failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enhanced recommendations failed: {str(e)}")
+
+# Multi-angle skin analysis endpoint
+@app.post("/analyze-skin-multi-angle")
+async def analyze_skin_multi_angle(
+    files: List[UploadFile] = File(...),
+    analysis_type: str = "comprehensive",
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """
+    Multi-angle skin analysis endpoint for processing multiple images from different angles
+    
+    Args:
+        files: List of image files from different angles (center, left, right)
+        analysis_type: Type of analysis (comprehensive, quick, streaming, ensemble)
+        current_user_id: Authenticated user ID
+    """
+    logger.info("🔬 Starting multi-angle skin analysis")
+    logger.info(f"   - User ID: {current_user_id}")
+    logger.info(f"   - Analysis type: {analysis_type}")
+    logger.info(f"   - Number of files: {len(files)}")
+    
+    # Debug: Log file details
+    for i, file in enumerate(files):
+        logger.info(f"   - File {i}: {file.filename}, content_type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    
+    try:
+        # Process each image
+        analysis_results = []
+        
+        for i, file in enumerate(files):
+            logger.info(f"📸 Processing image {i + 1}/{len(files)}: {file.filename}")
+            
+            try:
+                # Read file content
+                content = await file.read()
+                logger.info(f"   - File size: {len(content)} bytes")
+                
+                # Validate file
+                if len(content) == 0:
+                    logger.error(f"❌ Empty file: {file.filename}")
+                    continue
+            except Exception as e:
+                logger.error(f"❌ Error reading file {file.filename}: {e}")
+                continue
+            
+            # Get user profile for enhanced analysis
+            user_profile_result = await db_manager.get_skin_profile(current_user_id)
+            user_profile = user_profile_result.get("data") if user_profile_result.get("success") else None
+            
+            # Perform enhanced skin analysis
+            analysis_result = await enhanced_skin_analysis_service.analyze_skin_image(
+                image_data=content,
+                user_profile=user_profile,
+                analysis_type=analysis_type
+            )
+            
+            if analysis_result["success"]:
+                analysis_results.append({
+                    "angle": file.filename.split('_')[0] if '_' in file.filename else f"angle_{i}",
+                    "analysis": analysis_result["data"]
+                })
+                logger.info(f"✅ Analysis completed for {file.filename}")
+            else:
+                logger.error(f"❌ Analysis failed for {file.filename}: {analysis_result['error']}")
+        
+        if not analysis_results:
+            raise HTTPException(status_code=500, detail="All image analyses failed")
+        
+        # Combine results from all angles
+        combined_result = {
+            "success": True,
+            "multi_angle_analysis": True,
+            "total_images": len(files),
+            "successful_analyses": len(analysis_results),
+            "results": analysis_results,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        logger.info(f"✅ Multi-angle analysis completed: {len(analysis_results)}/{len(files)} successful")
+        return combined_result
+        
+    except Exception as e:
+        logger.error(f"❌ Multi-angle analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Multi-angle analysis failed: {str(e)}")
+
+# Comprehensive analysis endpoint with enhanced logging
+@app.post("/analyze-comprehensive-enhanced")
+async def analyze_comprehensive_enhanced(
+    file: UploadFile = File(...),
+    analysis_type: str = "comprehensive",
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """
+    Comprehensive enhanced analysis combining skin analysis and product recommendations
+    
+    Features:
+    - Complete skin analysis workflow
+    - AI-powered product recommendations
+    - Comprehensive logging throughout
+    - Error handling and fallbacks
+    - Detailed results and metadata
+    """
+    logger.info("🎯 Starting comprehensive enhanced analysis")
+    logger.info(f"   - User ID: {current_user_id}")
+    logger.info(f"   - Analysis type: {analysis_type}")
+    logger.info(f"   - File: {file.filename}")
+    
+    try:
+        # Step 1: Enhanced skin analysis
+        logger.info("🔬 Step 1: Enhanced skin analysis")
+        skin_analysis_result = await enhanced_skin_analysis_service.analyze_skin_image(
+            image_data=await file.read(),
+            user_profile=None,  # Will be fetched in the service
+            analysis_type=analysis_type
+        )
+        
+        if not skin_analysis_result["success"]:
+            logger.error(f"❌ Skin analysis failed: {skin_analysis_result['error']}")
+            raise HTTPException(status_code=500, detail=skin_analysis_result["error"])
+        
+        skin_analysis = skin_analysis_result["data"]
+        logger.info("✅ Skin analysis completed")
+        logger.info(f"   - Conditions detected: {len(skin_analysis.get('detected_conditions', []))}")
+        logger.info(f"   - Skin health score: {skin_analysis.get('skin_health_score', 0):.2f}")
+        
+        # Step 2: Enhanced product recommendations
+        logger.info("🛍️ Step 2: Enhanced product recommendations")
+        recommendations_result = await enhanced_product_recommendation_service.get_enhanced_recommendations(
+            skin_analysis=skin_analysis,
+            user_profile=None,  # Will be fetched in the service
+            recommendation_type="comprehensive",
+            max_recommendations=10
+        )
+        
+        if not recommendations_result["success"]:
+            logger.error(f"❌ Product recommendations failed: {recommendations_result['error']}")
+            # Continue without recommendations rather than failing completely
+            recommendations = []
+            logger.warning("⚠️ Continuing without product recommendations")
+        else:
+            recommendations = recommendations_result["recommendations"]
+            logger.info("✅ Product recommendations completed")
+            logger.info(f"   - Recommendations: {len(recommendations)}")
+        
+        # Step 3: Combine results
+        logger.info("📊 Step 3: Combining results")
+        comprehensive_result = {
+            "success": True,
+            "analysis_type": analysis_type,
+            "timestamp": datetime.now().isoformat(),
+            "skin_analysis": skin_analysis,
+            "product_recommendations": recommendations,
+            "metadata": {
+                "skin_analysis_success": skin_analysis_result["success"],
+                "recommendations_success": recommendations_result.get("success", False),
+                "total_processing_time": 0,  # Will be calculated
+                "user_id": current_user_id
+            }
+        }
+        
+        logger.info("🎉 Comprehensive enhanced analysis completed successfully")
+        return comprehensive_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Comprehensive enhanced analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Comprehensive analysis failed: {str(e)}")
 
 async def _stream_analysis_results(content: bytes, user_id: str, analysis_id: str):
     """Stream analysis results in real-time"""
@@ -617,12 +905,14 @@ async def get_cache_stats():
 @app.post("/auth/signup")
 async def signup(request: SignUpRequest):
     """User signup"""
-    return await auth_manager.signup(request)
+    result = await auth_manager.sign_up(request.email, request.password)
+    return result
 
 @app.post("/auth/signin")
 async def signin(request: SignInRequest):
     """User signin"""
-    return await auth_manager.signin(request)
+    result = await auth_manager.sign_in(request.email, request.password)
+    return result
 
 @app.post("/auth/refresh")
 async def refresh_token(current_user: dict = Depends(get_current_user)):
@@ -673,7 +963,7 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     uvicorn.run(
-        "enhanced_main:app",
+        "main:app",
         host=API_HOST,
         port=API_PORT,
         reload=DEBUG,

@@ -5,7 +5,11 @@ from openai import OpenAI
 from typing import Dict, List, Optional, Any
 import base64
 import logging
-from config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_ENABLED
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_ENABLED
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

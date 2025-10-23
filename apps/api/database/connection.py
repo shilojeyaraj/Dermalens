@@ -1,11 +1,16 @@
-"""
+﻿"""
 Database operations and models for Supabase integration
 """
 from supabase import create_client, Client
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import uuid
-from config import (
+import sys
+import os
+
+# Add packages/config to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import (
     SUPABASE_URL, 
     SUPABASE_SERVICE_KEY, 
     PROFILES_TABLE, 
@@ -17,29 +22,29 @@ class DatabaseManager:
     """Manages all database operations with Supabase"""
     
     def __init__(self):
-        print(f"🔧 [DATABASE] Initializing DatabaseManager...")
-        print(f"🌐 [DATABASE] Supabase URL: {SUPABASE_URL}")
-        print(f"🔑 [DATABASE] Service Key: {SUPABASE_SERVICE_KEY[:20]}...")
-        print(f"📋 [DATABASE] Tables: {PROFILES_TABLE}, {USER_IMAGES_TABLE}, {USER_SKIN_PROFILES_TABLE}")
+        print(f"[DATABASE] Initializing DatabaseManager...")
+        print(f"[DATABASE] Supabase URL: {SUPABASE_URL}")
+        print(f"[DATABASE] Service Key: {SUPABASE_SERVICE_KEY[:20]}...")
+        print(f"[DATABASE] Tables: {PROFILES_TABLE}, {USER_IMAGES_TABLE}, {USER_SKIN_PROFILES_TABLE}")
         
         self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        print(f"✅ [DATABASE] Supabase client created successfully")
+        print(f"[DATABASE] Supabase client created successfully")
     
     # Profile Operations
     async def create_profile(self, user_id: str, email: str, username: str = None, profile_picture: str = None, first_name: str = None, last_name: str = None) -> Dict:
         """Create a new user profile or update existing one"""
-        print(f"💾 [DATABASE] Creating/updating profile for user_id: {user_id}")
-        print(f"📧 [DATABASE] Email: {email}")
-        print(f"👤 [DATABASE] Username: {username}")
-        print(f"👤 [DATABASE] First Name: {first_name}")
-        print(f"👤 [DATABASE] Last Name: {last_name}")
-        print(f"📋 [DATABASE] Table: {PROFILES_TABLE}")
+        print(f" [DATABASE] Creating/updating profile for user_id: {user_id}")
+        print(f" [DATABASE] Email: {email}")
+        print(f" [DATABASE] Username: {username}")
+        print(f" [DATABASE] First Name: {first_name}")
+        print(f" [DATABASE] Last Name: {last_name}")
+        print(f" [DATABASE] Table: {PROFILES_TABLE}")
         
         try:
             # First, check if profile already exists
             existing_profile = await self.get_profile(user_id)
             if existing_profile["success"] and existing_profile["data"]:
-                print(f"ℹ️ [DATABASE] Profile already exists, updating...")
+                print(f" [DATABASE] Profile already exists, updating...")
                 # Update existing profile
                 profile_data = {
                     "email": email,
@@ -50,16 +55,16 @@ class DatabaseManager:
                     "updated_at": datetime.now().isoformat()
                 }
                 
-                print(f"📤 [DATABASE] Profile data to update: {profile_data}")
+                print(f" [DATABASE] Profile data to update: {profile_data}")
                 
                 result = self.supabase.table(PROFILES_TABLE).update(profile_data).eq("id", user_id).execute()
                 
-                print(f"📥 [DATABASE] Update result: {result}")
-                print(f"✅ [DATABASE] Profile updated successfully")
+                print(f" [DATABASE] Update result: {result}")
+                print(f" [DATABASE] Profile updated successfully")
                 
                 return {"success": True, "data": result.data[0] if result.data else None}
             else:
-                print(f"ℹ️ [DATABASE] Profile doesn't exist, creating new one...")
+                print(f" [DATABASE] Profile doesn't exist, creating new one...")
                 # Create new profile
                 profile_data = {
                     "id": user_id,
@@ -72,18 +77,18 @@ class DatabaseManager:
                     "updated_at": datetime.now().isoformat()
                 }
                 
-                print(f"📤 [DATABASE] Profile data to insert: {profile_data}")
+                print(f" [DATABASE] Profile data to insert: {profile_data}")
                 
                 result = self.supabase.table(PROFILES_TABLE).insert(profile_data).execute()
                 
-                print(f"📥 [DATABASE] Insert result: {result}")
-                print(f"✅ [DATABASE] Profile created successfully")
+                print(f" [DATABASE] Insert result: {result}")
+                print(f" [DATABASE] Profile created successfully")
                 
                 return {"success": True, "data": result.data[0] if result.data else None}
                 
         except Exception as e:
-            print(f"❌ [DATABASE] Profile creation/update failed: {str(e)}")
-            print(f"❌ [DATABASE] Error type: {type(e).__name__}")
+            print(f" [DATABASE] Profile creation/update failed: {str(e)}")
+            print(f" [DATABASE] Error type: {type(e).__name__}")
             return {"success": False, "error": str(e)}
     
     async def get_profile(self, user_id: str) -> Dict:
@@ -235,3 +240,4 @@ class SkinProfileUpdate(BaseModel):
 class UserImageCreate(BaseModel):
     storage_path: str
     bucket: str = "user-images"
+

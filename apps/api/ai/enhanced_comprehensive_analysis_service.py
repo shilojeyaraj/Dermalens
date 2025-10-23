@@ -7,15 +7,18 @@ import logging
 from typing import Dict, Optional, Any, List
 from datetime import datetime
 import json
+import sys
+import os
 
 # Import existing services
 from database import db_manager
-from google_search_service import google_search_service
-from elasticsearch_service import elasticsearch_service
-from vertex_ai_service import vertex_ai_service
+from infrastructure.google_search_service import google_search_service
+from infrastructure.elasticsearch_service import elasticsearch_service
+from ai.vertex_ai_service import vertex_ai_service
 
 # Import configuration
-from config import (
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import (
     VERTEX_AI_ENABLED, VERTEX_AI_STREAMING_ENABLED, ENSEMBLE_ENABLED,
     PERFORMANCE_MONITORING_ENABLED
 )

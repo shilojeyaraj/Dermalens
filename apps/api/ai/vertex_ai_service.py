@@ -14,10 +14,26 @@ import numpy as np
 from PIL import Image
 import io
 
+# Configure logging FIRST
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Google Cloud AI Platform imports
 from google.cloud import aiplatform
 from google.cloud.aiplatform import gapic as aip
-from google.cloud.aiplatform.gapic.schema import predict, streaming_predict
+try:
+    from google.cloud.aiplatform.gapic.schema import predict
+    # streaming_predict may not be available in all versions
+    try:
+        from google.cloud.aiplatform.gapic.schema import streaming_predict
+    except ImportError:
+        streaming_predict = None
+        logger.warning("streaming_predict not available in this version of google-cloud-aiplatform")
+except ImportError as e:
+    logger.warning(f"Could not import predict schemas: {e}")
+    predict = None
+    streaming_predict = None
+
 from google.cloud import storage
 from google.cloud import bigquery
 
@@ -25,16 +41,15 @@ from google.cloud import bigquery
 import redis.asyncio as redis
 
 # Configuration
-from config import (
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import (
     GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_REGION, VERTEX_AI_ENABLED, 
     VERTEX_AI_ENDPOINT, VERTEX_AI_CACHE_ENABLED, VERTEX_AI_STREAMING_ENABLED,
     ENSEMBLE_ENABLED, MODEL_ENSEMBLE_WEIGHTS, PERFORMANCE_MONITORING_ENABLED,
     METRICS_ENDPOINT
 )
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class VertexAISkinAnalysisService:

@@ -7,7 +7,11 @@ import base64
 import logging
 from PIL import Image
 import io
-from config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_ENABLED
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_ENABLED
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

@@ -12,7 +12,7 @@ import io
 import base64
 import requests
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime
 import google.generativeai as genai
@@ -184,131 +184,104 @@ def classify_skin_conditions(face_regions: List) -> List[Dict[str, Any]]:
     
     return results
 
+
+
+def normalize_user_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ensure user profile has consistent defaults."""
+    if not profile:
+        return {}
+    normalized = dict(profile)
+    age_value = normalized.get("age")
+    if age_value is not None:
+        try:
+            normalized["age"] = int(age_value)
+        except (TypeError, ValueError):
+            normalized["age"] = age_value
+    for key in ("first_name", "last_name", "username", "phone"):
+        if normalized.get(key) is None:
+            normalized[key] = ""
+    return normalized
+
+
+def normalize_skin_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ensure skin profile fields and aliases are available."""
+    if not profile:
+        return {}
+    normalized = dict(profile)
+    alias_source = normalized.get("skin_concerns") or normalized.get("primary_concerns")
+    normalized["skin_concerns"] = list(alias_source or [])
+    normalized["primary_concerns"] = list(normalized.get("primary_concerns") or normalized["skin_concerns"])
+    for key in (
+        "pre_existing_conditions",
+        "allergies",
+        "skin_goals",
+        "preferred_brands",
+        "medical_conditions",
+    ):
+        normalized[key] = list(normalized.get(key) or [])
+    if normalized.get("additional_info") is None:
+        normalized["additional_info"] = ""
+    return normalized
+
+
 def enhance_product_recommendations(products: List[Dict[str, Any]], user_skin_profile: Dict, detected_conditions: List[str]) -> List[Dict[str, Any]]:
     """Enhance product recommendations based on user's skin profile"""
-    if not user_skin_profile:
+    profile = normalize_skin_profile(user_skin_profile)
+    if not profile:
         return products
-    
+
     enhanced_products = []
-    
+
     for product in products:
         # Add personalized scoring based on user profile
         personalized_score = 0
-        
+
         # Consider skin type compatibility
-        skin_type = user_skin_profile.get("skin_type")
+        skin_type = profile.get("skin_type")
         if skin_type == "dry" and "moisturizer" in product["type"].lower():
             personalized_score += 2
         elif skin_type == "oily" and "cleanser" in product["type"].lower():
             personalized_score += 2
         elif skin_type == "sensitive" and "gentle" in product["description"].lower():
             personalized_score += 3
-        
+
         # Consider allergies
-        allergies = user_skin_profile.get("allergies", [])
+        allergies = profile.get("allergies", [])
         product_safe = True
         for allergy in allergies:
             if allergy.lower() in product["description"].lower():
                 product_safe = False
                 break
-        
+
         if not product_safe:
             continue
-        
+
         # Consider sensitivity level
-        sensitivity = user_skin_profile.get("sensitivity_level")
+        sensitivity = profile.get("sensitivity_level")
         if sensitivity == "high" and "fragrance-free" in product["description"].lower():
+            personalized_score += 3
+        elif sensitivity == "high" and "gentle" in product["description"].lower():
             personalized_score += 2
-        elif sensitivity == "high" and any(ingredient in product["description"].lower() for ingredient in ["fragrance", "parfum", "alcohol"]):
-            personalized_score -= 2
-        
-        # Add personalized score to product
-        enhanced_product = product.copy()
-        enhanced_product["personalized_score"] = product["rating"] + (personalized_score * 0.1)
-        enhanced_products.append(enhanced_product)
-    
-    # Sort by personalized score
-    enhanced_products.sort(key=lambda x: x["personalized_score"], reverse=True)
+
+        # Boost for detected conditions
+        for condition in detected_conditions:
+            if condition.replace("_", " ") in product["description"].lower():
+                personalized_score += 1
+
+        # Boost for matching concerns
+        for concern in profile.get("skin_concerns", []):
+            if concern.replace("_", " ") in product["description"].lower():
+                personalized_score += 2
+
+        product_copy = dict(product)
+        product_copy["personalized_score"] = personalized_score
+        enhanced_products.append(product_copy)
+
+    enhanced_products.sort(key=lambda x: x.get("personalized_score", 0), reverse=True)
+
     return enhanced_products
 
-def search_products(conditions: List[str]) -> List[Dict[str, Any]]:
-    """Search for skincare products using Google Store API (mock implementation)"""
-    # This is a mock implementation - in production, you'd use the actual Google Store API
-    product_database = {
-        "acne": [
-            {
-                "name": "CeraVe Acne Foaming Cream Cleanser",
-                "brand": "CeraVe",
-                "price": 16.99,
-                "rating": 4.5,
-                "description": "Contains benzoyl peroxide to treat acne",
-                "image": "/cerave-acne-cleanser.jpg",
-                "type": "Cleanser"
-            },
-            {
-                "name": "The Ordinary Niacinamide 10% + Zinc 1%",
-                "brand": "The Ordinary",
-                "price": 12.90,
-                "rating": 4.6,
-                "description": "Reduces blemishes and balances oil production",
-                "image": "/ordinary-niacinamide.jpg",
-                "type": "Serum"
-            }
-        ],
-        "hyperpigmentation": [
-            {
-                "name": "Paula's Choice 10% Azelaic Acid Booster",
-                "brand": "Paula's Choice",
-                "price": 36.00,
-                "rating": 4.7,
-                "description": "Reduces dark spots and evens skin tone",
-                "image": "/paula-choice-azelaic.jpg",
-                "type": "Treatment"
-            },
-            {
-                "name": "The Ordinary Vitamin C Suspension 23%",
-                "brand": "The Ordinary",
-                "price": 7.20,
-                "rating": 4.3,
-                "description": "Brightens skin and reduces dark spots",
-                "image": "/ordinary-vitamin-c.jpg",
-                "type": "Serum"
-            }
-        ],
-        "dry_skin": [
-            {
-                "name": "CeraVe Moisturizing Cream",
-                "brand": "CeraVe",
-                "price": 19.99,
-                "rating": 4.8,
-                "description": "Rich moisturizer with ceramides and hyaluronic acid",
-                "image": "/cerave-moisturizer.jpg",
-                "type": "Moisturizer"
-            }
-        ],
-        "wrinkles": [
-            {
-                "name": "The Ordinary Retinol 0.5% in Squalane",
-                "brand": "The Ordinary",
-                "price": 9.80,
-                "rating": 4.4,
-                "description": "Anti-aging retinol treatment",
-                "image": "/ordinary-retinol.jpg",
-                "type": "Treatment"
-            }
-        ]
-    }
-    
-    recommended_products = []
-    for condition in conditions:
-        if condition in product_database:
-            recommended_products.extend(product_database[condition])
-    
-    # Remove duplicates and sort by rating
-    unique_products = list({product["name"]: product for product in recommended_products}.values())
-    return sorted(unique_products, key=lambda x: x["rating"], reverse=True)
-
-async def generate_personalized_report(user_skin_profile: Dict, analysis_results: List[Dict], detected_conditions: List[str]) -> Dict[str, Any]:
+def generate_personalized_report(user_skin_profile: Dict, analysis_results: List[Dict], detected_conditions: List[str]) -> Dict[str, Any]:
     """Generate personalized skin report using Google Gemini 1.5 Pro"""
     if not GEMINI_API_KEY:
         return {
@@ -786,9 +759,10 @@ async def get_current_user_info(current_user: Dict = Depends(get_current_user)):
         if not profile_result["success"]:
             raise HTTPException(status_code=404, detail="User profile not found")
         
+        profile = normalize_user_profile(profile_result.get("data"))
         return {
             "user": current_user,
-            "profile": profile_result["data"]
+            "profile": profile
         }
         
     except HTTPException:
@@ -808,8 +782,9 @@ async def update_profile(
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
-        
-        return {"message": "Profile updated successfully", "profile": result["data"]}
+
+        profile = normalize_user_profile(result.get("data"))
+        return {"message": "Profile updated successfully", "profile": profile}
         
     except HTTPException:
         raise
@@ -824,8 +799,12 @@ async def get_profile(current_user_id: str = Depends(get_current_user_id)):
         
         if not result["success"]:
             raise HTTPException(status_code=404, detail="Profile not found")
-        
-        return result["data"]
+
+        profile = normalize_user_profile(result.get("data"))
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        return profile
         
     except HTTPException:
         raise
@@ -845,15 +824,16 @@ async def create_skin_profile(
         
         if existing_result["success"] and existing_result["data"]:
             # Update existing profile
-            result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True))
+            result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True, exclude={"user_id"}))
         else:
             # Create new profile
-            result = await db_manager.create_skin_profile(current_user_id, skin_profile.dict())
+            result = await db_manager.create_skin_profile(current_user_id, skin_profile.dict(exclude={"user_id"}))
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
-        
-        return {"message": "Skin profile saved successfully", "skin_profile": result["data"]}
+
+        saved_profile = normalize_skin_profile(result.get("data"))
+        return {"message": "Skin profile saved successfully", "skin_profile": saved_profile}
         
     except HTTPException:
         raise
@@ -868,8 +848,12 @@ async def get_skin_profile(current_user_id: str = Depends(get_current_user_id)):
         
         if not result["success"]:
             raise HTTPException(status_code=404, detail="Skin profile not found")
-        
-        return result["data"]
+
+        profile = normalize_skin_profile(result.get("data"))
+        if not profile:
+            raise HTTPException(status_code=404, detail="Skin profile not found")
+
+        return profile
         
     except HTTPException:
         raise
@@ -883,12 +867,13 @@ async def update_skin_profile(
 ):
     """Update user skin profile"""
     try:
-        result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True))
+        result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True, exclude={"user_id"}))
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
-        
-        return {"message": "Skin profile updated successfully", "skin_profile": result["data"]}
+
+        updated_profile = normalize_skin_profile(result.get("data"))
+        return {"message": "Skin profile updated successfully", "skin_profile": updated_profile}
         
     except HTTPException:
         raise
@@ -961,7 +946,9 @@ async def analyze_skin(
         
         # Get user's skin profile for enhanced recommendations
         skin_profile_result = await db_manager.get_skin_profile(current_user_id)
-        user_skin_profile = skin_profile_result["data"] if skin_profile_result["success"] else None
+        user_skin_profile = normalize_skin_profile(
+            skin_profile_result.get("data") if skin_profile_result.get("success") else {}
+        )
         
         # Get product recommendations using Elasticsearch
         detected_conditions = analysis_result["detected_conditions"]

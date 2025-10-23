@@ -12,15 +12,11 @@ from dataclasses import dataclass, asdict
 import statistics
 import math
 
-# Google Cloud monitoring
-from google.cloud import monitoring_v3
-from google.cloud.monitoring_v3 import query
-
-# Prometheus for metrics
-from prometheus_client import Counter, Histogram, Gauge, start_http_server
-
 # Configuration
-from config import (
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
+from settings import (
     PERFORMANCE_MONITORING_ENABLED, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_REGION,
     METRICS_ENDPOINT
 )
@@ -28,6 +24,29 @@ from config import (
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Optional Google Cloud monitoring (only if package installed)
+try:
+    from google.cloud import monitoring_v3
+    from google.cloud.monitoring_v3 import query
+    GOOGLE_MONITORING_AVAILABLE = True
+except ImportError:
+    logger.warning("google-cloud-monitoring not installed. Google Cloud monitoring features will be disabled.")
+    monitoring_v3 = None
+    query = None
+    GOOGLE_MONITORING_AVAILABLE = False
+
+# Optional Prometheus for metrics (only if package installed)
+try:
+    from prometheus_client import Counter, Histogram, Gauge, start_http_server
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    logger.warning("prometheus-client not installed. Prometheus monitoring features will be disabled.")
+    Counter = None
+    Histogram = None
+    Gauge = None
+    start_http_server = None
+    PROMETHEUS_AVAILABLE = False
 
 
 @dataclass
@@ -99,20 +118,25 @@ class PerformanceMonitoringService:
     def _initialize_monitoring(self):
         """Initialize Google Cloud monitoring"""
         try:
-            if self.enabled:
+            if self.enabled and GOOGLE_MONITORING_AVAILABLE and monitoring_v3:
                 self.monitoring_client = monitoring_v3.MetricServiceClient()
-                logger.info("✅ Performance monitoring initialized")
+                logger.info("[MONITORING] Performance monitoring initialized")
             else:
-                logger.warning("⚠️ Performance monitoring is disabled")
+                if not GOOGLE_MONITORING_AVAILABLE:
+                    logger.warning("[MONITORING] Google Cloud monitoring package not available - monitoring disabled")
+                else:
+                    logger.warning("[MONITORING] Performance monitoring is disabled in config")
+                self.enabled = False
                 
         except Exception as e:
-            logger.error(f"❌ Monitoring initialization failed: {e}")
+            logger.error(f"[MONITORING] Monitoring initialization failed: {e}")
             self.enabled = False
     
     def _setup_prometheus_metrics(self):
         """Setup Prometheus metrics"""
         try:
-            if not self.enabled:
+            if not self.enabled or not PROMETHEUS_AVAILABLE or not Counter:
+                logger.info("[MONITORING] Prometheus metrics disabled")
                 return
             
             # Analysis metrics
