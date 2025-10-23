@@ -2,7 +2,7 @@
 Enhanced Main Application for Dermalens
 Integrates all advanced AI services including Vertex AI, streaming, ensemble models, and monitoring
 """
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.gzip import GZipMiddleware
@@ -317,28 +317,29 @@ async def get_enhanced_recommendations(
 # Multi-angle skin analysis endpoint
 @app.post("/analyze-skin-multi-angle")
 async def analyze_skin_multi_angle(
-    files: List[UploadFile] = File(...),
-    analysis_type: str = "comprehensive",
+    request: Request,
     current_user_id: str = Depends(get_current_user_id)
 ):
     """
     Multi-angle skin analysis endpoint for processing multiple images from different angles
     
     Args:
-        files: List of image files from different angles (center, left, right)
-        analysis_type: Type of analysis (comprehensive, quick, streaming, ensemble)
+        request: FastAPI request object containing multipart form data
         current_user_id: Authenticated user ID
     """
     logger.info("🔬 Starting multi-angle skin analysis")
     logger.info(f"   - User ID: {current_user_id}")
-    logger.info(f"   - Analysis type: {analysis_type}")
-    logger.info(f"   - Number of files: {len(files)}")
-    
-    # Debug: Log file details
-    for i, file in enumerate(files):
-        logger.info(f"   - File {i}: {file.filename}, content_type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
     
     try:
+        # Parse multipart form data
+        form = await request.form()
+        files = form.getlist("files")
+        
+        logger.info(f"   - Number of files received: {len(files)}")
+        
+        if not files:
+            raise HTTPException(status_code=400, detail="No files provided")
+        
         # Process each image
         analysis_results = []
         
@@ -366,7 +367,7 @@ async def analyze_skin_multi_angle(
             analysis_result = await enhanced_skin_analysis_service.analyze_skin_image(
                 image_data=content,
                 user_profile=user_profile,
-                analysis_type=analysis_type
+                analysis_type="comprehensive"
             )
             
             if analysis_result["success"]:
