@@ -391,6 +391,28 @@ async def analyze_skin_multi_angle(
         if not analysis_results:
             raise HTTPException(status_code=500, detail="All image analyses failed")
         
+        # Aggregate detected conditions across angles and update user skin profile
+        aggregated_conditions: set = set()
+        try:
+            for r in analysis_results:
+                for c in r.get("analysis", {}).get("detected_conditions", []) or []:
+                    aggregated_conditions.add(c)
+            # Update user's skin profile with merged primary concerns
+            try:
+                profile_result = await db_manager.get_skin_profile(current_user_id)
+                existing_profile = profile_result.get("data") if profile_result.get("success") else None
+                if existing_profile:
+                    existing_concerns = set(existing_profile.get("primary_concerns", []))
+                    merged = list(sorted(existing_concerns.union(aggregated_conditions)))
+                    await db_manager.update_skin_profile(current_user_id, {"primary_concerns": merged})
+                elif aggregated_conditions:
+                    await db_manager.create_skin_profile(current_user_id, {"primary_concerns": list(aggregated_conditions)})
+                logger.info(f"🧠 Updated skin profile with detected concerns: {list(aggregated_conditions)}")
+            except Exception as e:
+                logger.error(f"⚠️ Failed to update skin profile: {e}")
+        except Exception as e:
+            logger.error(f"⚠️ Failed to aggregate conditions: {e}")
+
         # Combine results from all angles
         combined_result = {
             "success": True,
@@ -398,6 +420,7 @@ async def analyze_skin_multi_angle(
             "total_images": len(files),
             "successful_analyses": len(analysis_results),
             "results": analysis_results,
+            "detected_conditions": list(aggregated_conditions),
             "timestamp": datetime.now().isoformat()
         }
         

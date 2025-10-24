@@ -9,7 +9,7 @@ import base64
 import io
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-from PIL import Image
+from PIL import Image, ImageStat, ImageFilter
 import sys
 import os
 
@@ -58,6 +58,8 @@ class EnhancedSkinAnalysisService:
         self.confidence_threshold = 0.3
         self.max_faces = 5
         self.image_quality_threshold = 0.7
+        self.min_brightness = 40.0  # 0-255 grayscale
+        self.min_edge_density = 4.0  # heuristic for blur
         
         logger.info("🔬 Enhanced Skin Analysis Service (Simple) initialized")
         logger.info(f"   - Vertex AI: {'✅' if self.vertex_ai_enabled else '❌'}")
@@ -156,8 +158,9 @@ class EnhancedSkinAnalysisService:
                 image = image.convert('RGB')
                 logger.info("   - Converted to RGB")
             
-            # Calculate quality score (simplified)
-            quality_score = await self._calculate_image_quality_simple(image)
+            # Calculate quality score (enhanced heuristics)
+            quality = await self._calculate_image_quality_simple(image)
+            quality_score = quality.get("quality_score", 0.5)
             logger.info(f"   - Quality score: {quality_score:.2f}")
             
             if quality_score < self.image_quality_threshold:
@@ -178,6 +181,10 @@ class EnhancedSkinAnalysisService:
                     "width": image.width,
                     "height": image.height,
                     "quality_score": quality_score,
+                    "brightness": quality.get("brightness"),
+                    "edge_density": quality.get("edge_density"),
+                    "low_light": quality.get("low_light", False),
+                    "blurry": quality.get("blurry", False),
                     "format": image.format,
                     "mode": image.mode
                 }
@@ -190,8 +197,8 @@ class EnhancedSkinAnalysisService:
                 "error": f"Image validation failed: {str(e)}"
             }
     
-    async def _calculate_image_quality_simple(self, image: Image.Image) -> float:
-        """Calculate image quality score (simplified without OpenCV)"""
+    async def _calculate_image_quality_simple(self, image: Image.Image) -> Dict[str, Any]:
+        """Calculate image quality metrics (brightness, blur proxy) without OpenCV"""
         try:
             # Simple quality assessment based on image properties
             width, height = image.size
@@ -203,17 +210,39 @@ class EnhancedSkinAnalysisService:
             aspect_ratio = width / height
             aspect_score = 1.0 - abs(aspect_ratio - 1.0) * 0.5
             
-            # Basic quality score
-            quality = (size_score * 0.6 + aspect_score * 0.4)
+            # Brightness (0-255)
+            gray = image.convert('L')
+            stat = ImageStat.Stat(gray)
+            brightness = stat.mean[0]
+            brightness_score = min(max((brightness - self.min_brightness) / (255 - self.min_brightness), 0.0), 1.0)
+            low_light = brightness < self.min_brightness
+
+            # Edge density as blur proxy
+            edges = gray.filter(ImageFilter.FIND_EDGES)
+            edge_stat = ImageStat.Stat(edges)
+            edge_density = edge_stat.var[0]  # variance of edge map
+            edge_norm = min(edge_density / 20.0, 1.0)  # heuristic normalization
+            blurry = edge_density < self.min_edge_density
+
+            # Combined quality score
+            quality = (size_score * 0.3 + aspect_score * 0.2 + brightness_score * 0.3 + edge_norm * 0.2)
             
             logger.info(f"   - Size score: {size_score:.2f}")
             logger.info(f"   - Aspect ratio: {aspect_ratio:.2f} (score: {aspect_score:.2f})")
+            logger.info(f"   - Brightness: {brightness:.1f} (low_light={low_light})")
+            logger.info(f"   - Edge density: {edge_density:.2f} (blurry={blurry})")
             
-            return min(max(quality, 0.0), 1.0)
+            return {
+                "quality_score": float(min(max(quality, 0.0), 1.0)),
+                "brightness": float(brightness),
+                "edge_density": float(edge_density),
+                "low_light": low_light,
+                "blurry": blurry
+            }
             
         except Exception as e:
             logger.error(f"❌ Quality calculation failed: {str(e)}")
-            return 0.5  # Default medium quality
+            return {"quality_score": 0.5, "brightness": 128.0, "edge_density": 5.0, "low_light": False, "blurry": False}
     
     async def _perform_ai_analysis_simple(
         self, 
