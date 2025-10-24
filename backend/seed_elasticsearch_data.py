@@ -19,6 +19,84 @@ except UnicodeDecodeError:
     except Exception:
         print("⚠️  Could not read .env with UTF-8/UTF-16; proceeding with existing environment variables.")
 
+def _generate_realistic_url(brand, product_name, index):
+    """Generate realistic product URLs based on brand and product"""
+    # Clean brand name for URL
+    brand_clean = brand.lower().replace("'", "").replace(" ", "-").replace("+", "plus")
+    
+    # Clean product name for URL
+    product_clean = product_name.lower().replace(" ", "-").replace("'", "").replace("+", "plus")
+    
+    # Brand-specific URL patterns
+    brand_urls = {
+        "cerave": "https://www.cerave.com/products/",
+        "the-ordinary": "https://theordinary.com/products/",
+        "paulas-choice": "https://www.paulaschoice.com/products/",
+        "neutrogena": "https://www.neutrogena.com/products/",
+        "olay": "https://www.olay.com/products/",
+        "la-roche-posay": "https://www.laroche-posay.us/products/",
+        "avene": "https://www.aveneusa.com/products/",
+        "vichy": "https://www.vichyusa.com/products/",
+        "clinique": "https://www.clinique.com/products/",
+        "estee-lauder": "https://www.esteelauder.com/products/",
+        "lancome": "https://www.lancome-usa.com/products/",
+        "dior": "https://www.dior.com/en_us/products/",
+        "chanel": "https://www.chanel.com/us/products/",
+        "sk-ii": "https://www.sk-ii.com/products/",
+        "drunk-elephant": "https://www.drunkelephant.com/products/",
+        "glossier": "https://www.glossier.com/products/",
+        "fenty-beauty": "https://www.fentybeauty.com/products/",
+        "rare-beauty": "https://www.rarebeauty.com/products/",
+        "tatcha": "https://www.tatcha.com/products/",
+        "dr-jart": "https://www.drjart.com/products/",
+        "eltamd": "https://www.eltamd.com/products/",
+        "kiehls": "https://www.kiehls.com/products/",
+        "fresh": "https://www.fresh.com/products/",
+        "origins": "https://www.origins.com/products/",
+        "mac": "https://www.maccosmetics.com/products/",
+        "nars": "https://www.narscosmetics.com/products/",
+        "urban-decay": "https://www.urbandecay.com/products/",
+        "too-faced": "https://www.toofaced.com/products/",
+        "benefit": "https://www.benefitcosmetics.com/products/",
+        "tarte": "https://www.tartecosmetics.com/products/",
+        "it-cosmetics": "https://www.itcosmetics.com/products/",
+        "bareminerals": "https://www.bareminerals.com/products/",
+        "philosophy": "https://www.philosophy.com/products/",
+        "murad": "https://www.murad.com/products/",
+        "perricone-md": "https://www.perriconemd.com/products/",
+        "sunday-riley": "https://www.sundayriley.com/products/",
+        "herbivore": "https://www.herbivorebotanicals.com/products/",
+        "biossance": "https://www.biossance.com/products/",
+        "youth-to-the-people": "https://www.youthtothepeople.com/products/",
+        "glow-recipe": "https://www.glowrecipe.com/products/",
+        "krave-beauty": "https://www.kravebeauty.com/products/",
+        "versed": "https://www.versed.com/products/",
+        "the-inkey-list": "https://www.theinkeylist.com/products/",
+        "good-molecules": "https://www.goodmolecules.com/products/",
+        "the-chemistry-brand": "https://www.thechemistrybrand.com/products/",
+        "first-aid-beauty": "https://www.firstaidbeauty.com/products/",
+        "mario-badescu": "https://www.mariobadescu.com/products/",
+        "kate-somerville": "https://www.katesomerville.com/products/",
+        "ole-henriksen": "https://www.olehenriksen.com/products/"
+    }
+    
+    # Get base URL for brand, fallback to generic
+    base_url = brand_urls.get(brand_clean, "https://www.sephora.com/products/")
+    
+    # Create realistic product URL with specific product path
+    # Add product-specific identifiers
+    product_id = f"{index:04d}"
+    product_slug = f"{product_clean}-{product_id}"
+    
+    # For some brands, add more specific paths
+    if brand_clean in ["the-ordinary", "paulas-choice", "drunk-elephant"]:
+        return f"{base_url}{product_slug}"
+    elif brand_clean in ["cerave", "neutrogena", "olay"]:
+        return f"{base_url}{product_slug}"
+    else:
+        # For other brands, create more specific product URLs
+        return f"{base_url}{product_slug}"
+
 def generate_sample_products(count=1000):
     """Generate realistic sample skincare products"""
     
@@ -125,7 +203,7 @@ def generate_sample_products(count=1000):
             "product_type": product_type,
             "skin_conditions": product_conditions,
             "skin_types": product_skin_types,
-            "url": f"https://example.com/products/{i:04d}",
+            "url": _generate_realistic_url(brand, name, i),
             "image_url": f"https://picsum.photos/seed/skincare-{i}/600/600",
             "allergen_free": allergen_free,
             "fragrance_free": fragrance_free,
