@@ -419,40 +419,30 @@ class EnhancedProductRecommendationService:
         try:
             logger.info("   - Searching Elasticsearch database")
             
-            # Build search query
-            query = {
-                "query": {
-                    "bool": {
-                        "must": [],
-                        "should": []
-                    }
-                },
-                "size": limit
-            }
-            
-            # Add conditions to query
+            # Build search parameters
             conditions = needs.get("detected_conditions", [])
-            for condition in conditions:
-                query["query"]["bool"]["should"].append({
-                    "match": {"skin_conditions": condition}
-                })
-            
-            # Add skin type
             skin_type = needs.get("skin_type")
-            if skin_type:
-                query["query"]["bool"]["should"].append({
-                    "match": {"skin_types": skin_type}
-                })
-            
-            # Add product priorities
             priorities = needs.get("product_priorities", [])
-            for priority in priorities:
-                query["query"]["bool"]["should"].append({
-                    "match": {"category": priority}
-                })
             
-            # Execute search
-            result = await self.elasticsearch.search_products(query)
+            # Create search query string
+            query_parts = []
+            if conditions:
+                query_parts.extend(conditions)
+            if skin_type:
+                query_parts.append(skin_type)
+            if priorities:
+                query_parts.extend(priorities)
+            
+            query_string = " ".join(query_parts) if query_parts else "skincare"
+            
+            # Execute search with proper parameters
+            result = self.elasticsearch.search_products(
+                query=query_string,
+                skin_conditions=conditions if conditions else None,
+                skin_types=[skin_type] if skin_type else None,
+                product_types=priorities if priorities else None,
+                size=limit
+            )
             
             if result["success"]:
                 products = result["data"]
@@ -493,7 +483,7 @@ class EnhancedProductRecommendationService:
             products = []
             for term in search_terms[:3]:  # Limit to 3 searches
                 try:
-                    result = await self.google_search.search_products(term, limit=limit//3)
+                    result = await self.google_search.search_products(term, max_results=limit//3)
                     if result["success"]:
                         products.extend(result["data"])
                         logger.info(f"   - Google search '{term}': {len(result['data'])} products")
@@ -580,7 +570,13 @@ class EnhancedProductRecommendationService:
             
             logger.info(f"✅ Personalization completed")
             logger.info(f"   - Personalized products: {len(personalized_products)}")
-            logger.info(f"   - Score range: {min(p.personalization_score for p in personalized_products):.2f} - {max(p.personalization_score for p in personalized_products):.2f}")
+            
+            if personalized_products:
+                min_score = min(p.personalization_score for p in personalized_products)
+                max_score = max(p.personalization_score for p in personalized_products)
+                logger.info(f"   - Score range: {min_score:.2f} - {max_score:.2f}")
+            else:
+                logger.info("   - No products to personalize")
             
             return personalized_products
             
@@ -794,7 +790,11 @@ class EnhancedProductRecommendationService:
             }
             
             # Cache the results
-            await self.caching.set(cache_key, cache_data, ttl=1800)  # 30 minutes TTL
+            await self.caching.store_recommendation_cache(
+                conditions=needs.get("detected_conditions", []),
+                user_profile=user_profile,
+                recommendations=cache_data
+            )
             
             logger.info(f"✅ Recommendations cached with key: {cache_key}")
             
