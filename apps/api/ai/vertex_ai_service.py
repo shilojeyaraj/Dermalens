@@ -101,22 +101,61 @@ class VertexAISkinAnalysisService:
         """Initialize all required Google Cloud clients"""
         try:
             if self.enabled:
-                # Initialize AI Platform clients
-                self.prediction_client = aiplatform.gapic.PredictionServiceClient()
-                if self.streaming_enabled:
-                    self.streaming_client = aiplatform.gapic.PredictionServiceClient()
+                # Set up authentication using environment variables
+                import os
+                from google.oauth2 import service_account
+                
+                # Check if we have environment variables for authentication
+                if os.getenv('GOOGLE_CLOUD_TYPE') == 'service_account':
+                    # Create credentials from environment variables
+                    credentials_info = {
+                        "type": "service_account",
+                        "project_id": os.getenv('GOOGLE_CLOUD_PROJECT_ID'),
+                        "private_key_id": os.getenv('GOOGLE_CLOUD_PRIVATE_KEY_ID'),
+                        "private_key": os.getenv('GOOGLE_CLOUD_PRIVATE_KEY', '').replace('\\n', '\n'),
+                        "client_email": os.getenv('GOOGLE_CLOUD_CLIENT_EMAIL'),
+                        "client_id": os.getenv('GOOGLE_CLOUD_CLIENT_ID'),
+                        "auth_uri": os.getenv('GOOGLE_CLOUD_AUTH_URI'),
+                        "token_uri": os.getenv('GOOGLE_CLOUD_TOKEN_URI'),
+                        "auth_provider_x509_cert_url": os.getenv('GOOGLE_CLOUD_AUTH_PROVIDER_X509_CERT_URL'),
+                        "client_x509_cert_url": os.getenv('GOOGLE_CLOUD_CLIENT_X509_CERT_URL')
+                    }
+                    
+                    credentials = service_account.Credentials.from_service_account_info(credentials_info)
+                    logger.info("✅ Using environment variable authentication")
+                else:
+                    # Use default authentication
+                    credentials = None
+                    logger.info("✅ Using default Google Cloud authentication")
+                
+                # Initialize AI Platform clients with credentials
+                if credentials:
+                    self.prediction_client = aiplatform.gapic.PredictionServiceClient(credentials=credentials)
+                    if self.streaming_enabled:
+                        self.streaming_client = aiplatform.gapic.PredictionServiceClient(credentials=credentials)
+                else:
+                    self.prediction_client = aiplatform.gapic.PredictionServiceClient()
+                    if self.streaming_enabled:
+                        self.streaming_client = aiplatform.gapic.PredictionServiceClient()
                 
                 # Initialize caching
                 if self.cache_enabled:
                     self.cache_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
                 
-                # Initialize storage and BigQuery
-                self.storage_client = storage.Client(project=self.project_id)
-                self.bigquery_client = bigquery.Client(project=self.project_id)
+                # Initialize storage and BigQuery with credentials
+                if credentials:
+                    self.storage_client = storage.Client(project=self.project_id, credentials=credentials)
+                    self.bigquery_client = bigquery.Client(project=self.project_id, credentials=credentials)
+                else:
+                    self.storage_client = storage.Client(project=self.project_id)
+                    self.bigquery_client = bigquery.Client(project=self.project_id)
                 
                 # Initialize monitoring
                 if self.monitoring_enabled:
-                    self.monitoring_client = aiplatform.gapic.ModelServiceClient()
+                    if credentials:
+                        self.monitoring_client = aiplatform.gapic.ModelServiceClient(credentials=credentials)
+                    else:
+                        self.monitoring_client = aiplatform.gapic.ModelServiceClient()
                 
                 logger.info("✅ Vertex AI service initialized successfully")
             else:

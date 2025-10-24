@@ -51,9 +51,9 @@ class EnhancedSkinAnalysisService:
         self.elasticsearch = elasticsearch_service
         self.caching = intelligent_caching_service
         
-        # Service capabilities
-        self.vertex_ai_enabled = VERTEX_AI_ENABLED
-        self.ensemble_enabled = ENSEMBLE_ENABLED
+        # Service capabilities - re-enable Vertex AI with proper auth
+        self.vertex_ai_enabled = True  # Re-enabled with environment variables
+        self.ensemble_enabled = True
         
         # Analysis parameters
         self.confidence_threshold = 0.3
@@ -115,7 +115,7 @@ class EnhancedSkinAnalysisService:
             
             # Step 3: Perform AI analysis
             logger.info("🤖 Step 3: Performing AI analysis")
-            ai_results = await self._perform_ai_analysis(faces, user_profile, analysis_type)
+            ai_results = await self._perform_ai_analysis(faces, user_profile, analysis_type, image_data)
             if not ai_results["success"]:
                 logger.error(f"❌ AI analysis failed: {ai_results['error']}")
                 return ai_results
@@ -346,7 +346,8 @@ class EnhancedSkinAnalysisService:
         self, 
         faces: List[Dict[str, Any]], 
         user_profile: Optional[Dict[str, Any]], 
-        analysis_type: str
+        analysis_type: str,
+        image_data: bytes
     ) -> Dict[str, Any]:
         """Perform AI analysis on detected faces"""
         try:
@@ -354,7 +355,7 @@ class EnhancedSkinAnalysisService:
             
             if self.vertex_ai_enabled:
                 logger.info("   - Using Vertex AI for analysis")
-                return await self._vertex_ai_analysis(faces, user_profile, analysis_type)
+                return await self._vertex_ai_analysis(faces, user_profile, analysis_type, image_data)
             else:
                 logger.info("   - Using fallback analysis")
                 return await self._fallback_analysis(faces, user_profile, analysis_type)
@@ -370,31 +371,37 @@ class EnhancedSkinAnalysisService:
         self, 
         faces: List[Dict[str, Any]], 
         user_profile: Optional[Dict[str, Any]], 
-        analysis_type: str
+        analysis_type: str,
+        image_data: bytes
     ) -> Dict[str, Any]:
         """Perform analysis using Vertex AI"""
         try:
             logger.info("🔬 Starting Vertex AI analysis")
             
-            # Prepare analysis data
-            analysis_data = {
-                "faces": faces,
-                "user_profile": user_profile,
-                "analysis_type": analysis_type,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            # Call Vertex AI service
-            result = await self.vertex_ai.analyze_skin_comprehensive(analysis_data)
+            # Call Vertex AI service with correct parameters
+            result = await self.vertex_ai.analyze_skin_image(
+                image_data=image_data,  # Pass raw image bytes
+                user_profile=user_profile,
+                analysis_type=analysis_type
+            )
             
             if result["success"]:
                 logger.info("✅ Vertex AI analysis completed")
                 logger.info(f"   - Conditions: {len(result.get('detected_conditions', []))}")
                 logger.info(f"   - Confidence: {result.get('overall_confidence', 0):.2f}")
-                return {
-                    "success": True,
-                    "data": result["data"]
-                }
+                
+                # Handle different response structures
+                if "data" in result:
+                    return {
+                        "success": True,
+                        "data": result["data"]
+                    }
+                else:
+                    # If no 'data' key, use the result itself
+                    return {
+                        "success": True,
+                        "data": result
+                    }
             else:
                 logger.error(f"❌ Vertex AI analysis failed: {result.get('error')}")
                 return result
