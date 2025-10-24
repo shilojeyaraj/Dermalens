@@ -1,17 +1,34 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { UserProfileDialog } from "@/components/user-profile-dialog"
 import { FaceUploadDialog } from "@/components/face-upload-dialog"
 import { SkincareRoutineDialog } from "@/components/skincare-routine-dialog"
-import { Sparkles, Plus, Calendar } from "lucide-react"
+import { useUser } from "@/contexts/user-context"
+import { Sparkles, Plus, Calendar, User, LogIn, LogOut, Settings } from "lucide-react"
 
 export function Header() {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [isRoutineOpen, setIsRoutineOpen] = useState(false)
+  const { user, signOut } = useUser()
+  const router = useRouter()
+
+  const handleSignOut = () => {
+    signOut()
+    router.push('/')
+  }
 
   return (
     <>
@@ -44,13 +61,49 @@ export function Header() {
               >
                 <Plus className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" className="flex items-center gap-2" onClick={() => setIsProfileOpen(true)}>
-                <Avatar className="w-9 h-9">
-                  <AvatarImage src="/user-profile-photo.png" />
-                  <AvatarFallback className="bg-primary text-primary-foreground">JD</AvatarFallback>
-                </Avatar>
-                <span className="hidden sm:inline text-sm font-medium">Profile</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2">
+                    <Avatar className="w-9 h-9">
+                      <AvatarImage src="/user-profile-photo.png" />
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        {user ? user.username.charAt(0).toUpperCase() : 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden sm:inline text-sm font-medium">
+                      {user ? user.username : 'Profile'}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    {user ? user.email : 'Guest User'}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {user ? (
+                    <>
+                      <DropdownMenuItem onClick={() => router.push('/dashboard')}>
+                        <User className="mr-2 h-4 w-4" />
+                        Dashboard
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setIsProfileOpen(true)}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Profile Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleSignOut}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sign Out
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem onClick={() => router.push('/login')}>
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Sign In
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

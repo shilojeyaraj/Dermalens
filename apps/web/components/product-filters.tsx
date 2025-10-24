@@ -5,9 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, X } from "lucide-react"
+import { X } from "lucide-react"
 import type { Product } from "@/components/products-page"
 
 type ProductFiltersProps = {
@@ -66,23 +65,6 @@ export function ProductFilters({ products, onFilterChange }: ProductFiltersProps
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Search</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Clear Filters */}
       {hasActiveFilters && (
