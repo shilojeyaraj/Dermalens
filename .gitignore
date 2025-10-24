@@ -7,6 +7,21 @@ dermalens-*.json
 *.secret.json
 *.env
 *.env.*
+.env
+.env.*
+backend/.env
+backend/.env.*
+backend/production.env
+backend/production.env.*
+apps/api/.env
+apps/api/.env.*
+apps/api/*.json
+apps/api/dermalens-*.json
+**/dermalens-*.json
+**/*serviceaccount*.json
+**/*gcloud*.json
+**/*credentials*.json
+**/*secret*.json
 # Dependencies
 node_modules/
 npm-debug.log*
@@ -483,6 +498,29 @@ data/samples/
 *.pfx
 secrets/
 .secrets/
+# Google Cloud credentials
+**/google-cloud-*.json
+**/gcp-*.json
+**/service-account-*.json
+**/dermalens-*.json
+# Supabase keys
+**/supabase-*.json
+**/supabase-*.key
+# Database credentials
+**/database-*.json
+**/db-*.json
+# API keys in any format
+**/api-*.key
+**/api-*.json
+**/api-*.env
+# Production secrets
+**/production-*.env
+**/prod-*.env
+**/live-*.env
+# Development secrets
+**/dev-*.env
+**/development-*.env
+**/local-*.env
 
 # Build artifacts
 build/
