@@ -174,10 +174,16 @@ class EnhancedSkinAnalysisService:
                 image = image.resize(new_size, Image.Resampling.LANCZOS)
                 logger.info(f"   - Resized to: {new_size}")
             
+            # Convert processed image back to bytes for AI analysis
+            img_buffer = io.BytesIO()
+            image.save(img_buffer, format='JPEG', quality=95)
+            processed_bytes = img_buffer.getvalue()
+            
             return {
                 "success": True,
                 "data": {
                     "image": image,
+                    "image_bytes": processed_bytes,
                     "width": image.width,
                     "height": image.height,
                     "quality_score": quality_score,
@@ -286,8 +292,13 @@ class EnhancedSkinAnalysisService:
                 "timestamp": datetime.now().isoformat()
             }
             
-            # Call Vertex AI service
-            result = await self.vertex_ai.analyze_skin_comprehensive(analysis_data)
+            # Call Vertex AI service with image bytes
+            image_bytes = processed_image.get("image_bytes")
+            if not image_bytes:
+                raise ValueError("No image bytes available for analysis")
+            
+            logger.info(f"🔬 Calling Vertex AI with {len(image_bytes)} bytes")
+            result = await self.vertex_ai.analyze_skin_comprehensive(image_bytes, user_profile)
             
             if result["success"]:
                 logger.info("✅ Vertex AI analysis completed")

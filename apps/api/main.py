@@ -373,11 +373,23 @@ async def analyze_skin_multi_angle(
             user_profile = user_profile_result.get("data") if user_profile_result.get("success") else None
             
             # Perform enhanced skin analysis
+            logger.info(f"🤖 Starting enhanced skin analysis for {file.filename}")
+            logger.info(f"   - Image size: {len(content)} bytes")
+            logger.info(f"   - User profile available: {'✅' if user_profile else '❌'}")
+            
             analysis_result = await enhanced_skin_analysis_service.analyze_skin_image(
                 image_data=content,
                 user_profile=user_profile,
                 analysis_type="comprehensive"
             )
+            
+            logger.info(f"🔍 Analysis result for {file.filename}:")
+            logger.info(f"   - Success: {analysis_result.get('success', False)}")
+            logger.info(f"   - Error: {analysis_result.get('error', 'None')}")
+            if analysis_result.get('success'):
+                data = analysis_result.get('data', {})
+                logger.info(f"   - Detected conditions: {len(data.get('detected_conditions', []))}")
+                logger.info(f"   - Overall confidence: {data.get('overall_confidence', 0):.2f}")
             
             if analysis_result["success"]:
                 analysis_results.append({

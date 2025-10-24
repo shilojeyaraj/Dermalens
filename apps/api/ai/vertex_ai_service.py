@@ -186,6 +186,16 @@ class VertexAISkinAnalysisService:
             # Fallback to basic analysis
             return await self._fallback_analysis(image_data, user_profile)
     
+    async def analyze_skin_comprehensive(
+        self, 
+        image_data: bytes, 
+        user_profile: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Comprehensive skin analysis - alias for analyze_skin_image
+        """
+        return await self.analyze_skin_image(image_data, user_profile, "comprehensive")
+    
     async def _streaming_analysis(
         self, 
         image_data: bytes, 

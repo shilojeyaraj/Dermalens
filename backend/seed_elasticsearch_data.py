@@ -26,7 +26,13 @@ def generate_sample_products(count=1000):
         "CeraVe", "The Ordinary", "Paula's Choice", "Neutrogena", "Olay",
         "La Roche-Posay", "Avene", "Vichy", "Clinique", "Estée Lauder",
         "Lancôme", "Dior", "Chanel", "SK-II", "Drunk Elephant",
-        "Glossier", "Fenty Beauty", "Rare Beauty", "Tatcha", "Dr. Jart+"
+        "Glossier", "Fenty Beauty", "Rare Beauty", "Tatcha", "Dr. Jart+",
+        "EltaMD", "Kiehl's", "Fresh", "Origins", "MAC", "NARS", "Urban Decay",
+        "Too Faced", "Benefit", "Tarte", "IT Cosmetics", "BareMinerals",
+        "Philosophy", "Murad", "Perricone MD", "Sunday Riley", "Herbivore",
+        "Biossance", "Youth to the People", "Glow Recipe", "Krave Beauty",
+        "Versed", "The Inkey List", "Good Molecules", "The Chemistry Brand",
+        "First Aid Beauty", "Mario Badescu", "Kate Somerville", "Ole Henriksen"
     ]
     
     product_types = [
@@ -72,11 +78,13 @@ def generate_sample_products(count=1000):
         
         # Generate realistic price
         if brand in ["Chanel", "Dior", "Lancôme", "Estée Lauder", "SK-II"]:
-            price = round(random.uniform(50, 200), 2)
-        elif brand in ["Drunk Elephant", "Tatcha", "Dr. Jart+", "Glossier"]:
-            price = round(random.uniform(25, 80), 2)
+            price = round(random.uniform(50, 150), 2)
+        elif brand in ["Drunk Elephant", "Tatcha", "Dr. Jart+", "Glossier", "Sunday Riley", "Perricone MD"]:
+            price = round(random.uniform(25, 120), 2)
+        elif brand in ["The Ordinary", "The Inkey List", "Good Molecules", "Versed"]:
+            price = round(random.uniform(5, 25), 2)
         else:
-            price = round(random.uniform(8, 45), 2)
+            price = round(random.uniform(8, 80), 2)
         
         # Generate rating and review count
         rating = round(random.uniform(3.0, 5.0), 1)
@@ -118,7 +126,7 @@ def generate_sample_products(count=1000):
             "skin_conditions": product_conditions,
             "skin_types": product_skin_types,
             "url": f"https://example.com/products/{i:04d}",
-            "image_url": f"https://picsum.photos/seed/dermalens-{i}/600/600",
+            "image_url": f"https://picsum.photos/seed/skincare-{i}/600/600",
             "allergen_free": allergen_free,
             "fragrance_free": fragrance_free,
             "cruelty_free": cruelty_free,
