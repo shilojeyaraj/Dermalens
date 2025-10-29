@@ -15,8 +15,7 @@ import math
 # Configuration
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import (
+from config import (
     PERFORMANCE_MONITORING_ENABLED, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_REGION,
     METRICS_ENDPOINT
 )

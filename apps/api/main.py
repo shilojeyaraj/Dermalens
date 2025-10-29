@@ -29,11 +29,19 @@ from core.auth import auth_manager, get_current_user, get_current_user_id, SignU
 from infrastructure.elasticsearch_service import elasticsearch_service
 from infrastructure.google_search_service import google_search_service
 
-# Import configuration
+# Import seeding function
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'config'))
-from settings import (
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+try:
+    from seed_elasticsearch_data import generate_sample_products, seed_elasticsearch
+    SEEDING_AVAILABLE = True
+except ImportError:
+    SEEDING_AVAILABLE = False
+    print("⚠️  Seeding module not available")
+
+# Import configuration
+from config import (
     ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG, 
     VERTEX_AI_ENABLED, VERTEX_AI_STREAMING_ENABLED, ENSEMBLE_ENABLED,
     PERFORMANCE_MONITORING_ENABLED
@@ -51,6 +59,41 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Auto-seed database if empty
+async def auto_seed_database():
+    """Automatically seed the database if it's empty"""
+    if not SEEDING_AVAILABLE:
+        return
+        
+    try:
+        logger.info("🔍 Checking if database needs seeding...")
+        
+        # Check if database has products
+        result = await elasticsearch_service.search_products("", size=1)
+        if result.get("success") and len(result.get("products", [])) > 0:
+            logger.info("✅ Database already has products, skipping seeding")
+            return
+            
+        logger.info("🌱 Database is empty, starting auto-seeding...")
+        
+        # Generate and seed products
+        products = generate_sample_products(1000)
+        seed_result = seed_elasticsearch(products)
+        
+        if seed_result:
+            logger.info(f"🎉 Auto-seeding completed! Seeded {len(products)} products")
+        else:
+            logger.error("❌ Auto-seeding failed!")
+            
+    except Exception as e:
+        logger.error(f"❌ Auto-seeding error: {e}")
+
+# Run auto-seeding on startup
+@app.on_event("startup")
+async def startup_event():
+    """Run auto-seeding on startup"""
+    await auto_seed_database()
 
 # Add middleware
 app.add_middleware(
@@ -472,6 +515,22 @@ async def analyze_skin_multi_angle(
                 # Slight reduction if user has specific concerns
                 base_health_score -= 0.05
         
+        # Ensure we always have conditions for recommendations, even for good skin
+        if not all_conditions:
+            # Add default maintenance conditions for users with good skin
+            all_conditions = ["preventive_care", "maintenance_care"]
+            if user_profile and user_profile.get("skin_type"):
+                skin_type = user_profile["skin_type"].lower()
+                if "oily" in skin_type:
+                    all_conditions.append("oil_control")
+                elif "dry" in skin_type:
+                    all_conditions.append("hydration_boost")
+                elif "sensitive" in skin_type:
+                    all_conditions.append("gentle_care")
+                else:
+                    all_conditions.append("balanced_care")
+            logger.info(f"🎯 Added default conditions for good skin: {all_conditions}")
+        
         scan_analysis = {
             "detected_conditions": all_conditions,
             "scan_conditions": list(aggregated_conditions),
@@ -547,8 +606,9 @@ async def analyze_skin_multi_angle(
             "evening_routine": []
         }
         
-        if recs.get("success") and recs.get("recommendations"):
+        if recs.get("success") and recs.get("recommendations") and len(recs.get("recommendations", [])) > 0:
             rec_products = recs.get("recommendations", [])
+            logger.info(f"📋 Building routine from {len(rec_products)} recommendations")
             
             def _pick(cat):
                 for p in rec_products:
@@ -622,6 +682,133 @@ async def analyze_skin_multi_angle(
                     "url": moisturizer.get("url") or moisturizer.get("product_url"), 
                     "instructions": "Apply generously for overnight repair."
                 })
+        else:
+            # Fallback routine when no specific recommendations are available
+            logger.info("📋 Creating fallback routine based on profile data")
+            
+            # Determine skin type and concerns for personalized routine
+            skin_type = user_profile.get("skin_type", "combination") if user_profile else "combination"
+            primary_concerns = user_profile.get("primary_concerns", ["general_care"]) if user_profile else ["general_care"]
+            
+            # Morning routine based on skin type and concerns
+            if "dry" in skin_type.lower():
+                routine["morning_routine"] = [
+                    {
+                        "name": "Gentle Cleanser",
+                        "product": "Hydrating Facial Cleanser",
+                        "brand": "CeraVe",
+                        "url": "https://www.cerave.com/skincare/cleansers/hydrating-facial-cleanser",
+                        "instructions": "Use lukewarm water and gently cleanse for 30-60 seconds."
+                    },
+                    {
+                        "name": "Hyaluronic Acid Serum",
+                        "product": "Hyaluronic Acid 2% + B5",
+                        "brand": "The Ordinary",
+                        "url": "https://theordinary.com/en-us/hyaluronic-acid-2-b5-serum-100ml",
+                        "instructions": "Apply to damp skin for maximum hydration."
+                    },
+                    {
+                        "name": "Rich Moisturizer",
+                        "product": "Daily Moisturizing Lotion",
+                        "brand": "CeraVe",
+                        "url": "https://www.cerave.com/skincare/moisturizers/daily-moisturizing-lotion",
+                        "instructions": "Apply generously to face and neck."
+                    },
+                    {
+                        "name": "Sunscreen",
+                        "product": "Ultra-Light Daily UV Defense",
+                        "brand": "EltaMD",
+                        "url": "https://eltamd.com/product/uv-clear-broad-spectrum-spf-46/",
+                        "instructions": "Apply SPF 30+ as final step, reapply every 2 hours."
+                    }
+                ]
+            elif "oily" in skin_type.lower():
+                routine["morning_routine"] = [
+                    {
+                        "name": "Oil-Control Cleanser",
+                        "product": "Foaming Facial Cleanser",
+                        "brand": "CeraVe",
+                        "url": "https://www.cerave.com/skincare/cleansers/foaming-facial-cleanser",
+                        "instructions": "Use twice daily to control excess oil."
+                    },
+                    {
+                        "name": "Niacinamide Serum",
+                        "product": "Niacinamide 10% + Zinc 1%",
+                        "brand": "The Ordinary",
+                        "url": "https://theordinary.com/en-us/niacinamide-10-zinc-1-serum-100ml",
+                        "instructions": "Apply to help control oil and minimize pores."
+                    },
+                    {
+                        "name": "Oil-Free Moisturizer",
+                        "product": "PM Facial Moisturizing Lotion",
+                        "brand": "CeraVe",
+                        "url": "https://www.cerave.com/skincare/moisturizers/pm-facial-moisturizing-lotion",
+                        "instructions": "Lightweight formula that won't clog pores."
+                    },
+                    {
+                        "name": "Sunscreen",
+                        "product": "Clear Zinc Sunscreen",
+                        "brand": "EltaMD",
+                        "url": "https://eltamd.com/product/uv-clear-broad-spectrum-spf-46/",
+                        "instructions": "Oil-free sunscreen for acne-prone skin."
+                    }
+                ]
+            else:  # Combination or normal skin
+                routine["morning_routine"] = [
+                    {
+                        "name": "Balanced Cleanser",
+                        "product": "Hydrating Facial Cleanser",
+                        "brand": "CeraVe",
+                        "url": "https://www.cerave.com/skincare/cleansers/hydrating-facial-cleanser",
+                        "instructions": "Gentle cleanser suitable for all skin types."
+                    },
+                    {
+                        "name": "Vitamin C Serum",
+                        "product": "Vitamin C Suspension 23% + HA Spheres 2%",
+                        "brand": "The Ordinary",
+                        "url": "https://theordinary.com/en-us/vitamin-c-suspension-23-ha-spheres-2-100ml",
+                        "instructions": "Apply in the morning for antioxidant protection."
+                    },
+                    {
+                        "name": "Daily Moisturizer",
+                        "product": "Daily Facial Moisturizer",
+                        "brand": "CeraVe",
+                        "url": "https://www.cerave.com/skincare/moisturizers/daily-facial-moisturizer",
+                        "instructions": "Lightweight moisturizer with SPF 30."
+                    },
+                    {
+                        "name": "Sunscreen",
+                        "product": "UV Clear Broad-Spectrum SPF 46",
+                        "brand": "EltaMD",
+                        "url": "https://eltamd.com/product/uv-clear-broad-spectrum-spf-46/",
+                        "instructions": "Essential for daily sun protection."
+                    }
+                ]
+            
+            # Evening routine
+            routine["evening_routine"] = [
+                {
+                    "name": "Gentle Cleanser",
+                    "product": "Hydrating Facial Cleanser",
+                    "brand": "CeraVe",
+                    "url": "https://www.cerave.com/skincare/cleansers/hydrating-facial-cleanser",
+                    "instructions": "Remove makeup and daily impurities."
+                },
+                {
+                    "name": "Treatment Serum",
+                    "product": "Retinol 0.5% in Squalane",
+                    "brand": "The Ordinary",
+                    "url": "https://theordinary.com/en-us/retinol-0-5-in-squalane-100ml",
+                    "instructions": "Start with 2-3 times per week, increase gradually."
+                },
+                {
+                    "name": "Night Moisturizer",
+                    "product": "PM Facial Moisturizing Lotion",
+                    "brand": "CeraVe",
+                    "url": "https://www.cerave.com/skincare/moisturizers/pm-facial-moisturizing-lotion",
+                    "instructions": "Rich moisturizer for overnight repair."
+                }
+            ]
         
         # Combine results from all angles with recommendations
         combined_result = {
@@ -649,8 +836,11 @@ async def analyze_skin_multi_angle(
         return combined_result
         
     except Exception as e:
-        logger.error(f"❌ Multi-angle analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Multi-angle analysis failed: {str(e)}")
+        error_msg = str(e) if e else "Unknown error"
+        logger.error(f"❌ Multi-angle analysis failed: {error_msg}")
+        logger.error(f"   - Exception type: {type(e)}")
+        logger.error(f"   - Exception args: {getattr(e, 'args', 'No args')}")
+        raise HTTPException(status_code=500, detail=f"Multi-angle analysis failed: {error_msg}")
 
 # ------------------------------
 # Profile-based recommendations
@@ -697,7 +887,7 @@ async def generate_profile_recommendations(
             skin_analysis=skin_analysis,
             user_profile=user_profile,
             recommendation_type="profile_based",
-            max_recommendations=10,
+            max_recommendations=25,
             budget_range=None,
         )
 
@@ -1509,10 +1699,14 @@ async def shutdown_event():
     logger.info("🛑 Shutting down Enhanced Dermalens API")
 
 if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", API_PORT))
+    host = os.environ.get("HOST", API_HOST)
+    
     uvicorn.run(
         "main:app",
-        host=API_HOST,
-        port=API_PORT,
+        host=host,
+        port=port,
         reload=DEBUG,
         log_level="info"
     )

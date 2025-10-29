@@ -23,22 +23,22 @@ except Exception as e:
             print(f"Latin-1 error: {e3}")
 
 # Supabase Configuration
-SUPABASE_URL = "https://ezlevlxkxanlceofykrh.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NzYxNTksImV4cCI6MjA3NTM1MjE1OX0.oPovEwcfN-jhHPxFOczj3RkmCX2QZICQYnfmo6hQwhg"
-SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6bGV2bHhreGFubGNlb2Z5a3JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTc3NjE1OSwiZXhwIjoyMDc1MzUyMTU5fQ.SbhkLCmjqUDA1oBWLnXVzOeoiKYriiXe7AZ6L-9C2ag"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 # Google Custom Search API Configuration
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyAtT3Jon9cWkbfnNLR91F9J810vvjzu8JY")
-GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "96653b7de4a3d49fe")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "")
 GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
 
 # Google Gemini API Configuration
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCI1YRrJprS3ADJIY1U_deeFiJUTa4T_hk")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")  # gemini-1.5-pro has vision capabilities
 GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
 
 # Vertex AI Configuration
-GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")
+GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT", "")
 GOOGLE_CLOUD_REGION = os.getenv("GOOGLE_CLOUD_REGION", "us-central1")
 VERTEX_AI_ENABLED = os.getenv("VERTEX_AI_ENABLED", "True").lower() == "true"
 VERTEX_AI_ENDPOINT = os.getenv("VERTEX_AI_ENDPOINT", f"projects/{GOOGLE_CLOUD_PROJECT}/locations/{GOOGLE_CLOUD_REGION}/endpoints/skin-analysis")
@@ -62,14 +62,14 @@ API_PORT = int(os.getenv("API_PORT", 8000))
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
 # CORS Configuration
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,https://dermalens-frontend-941238576063.us-central1.run.app").split(",")
 
 # Model Configuration
 MODEL_PATH = os.getenv("MODEL_PATH", "models/skin_classifier.pth")
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.3"))
 
 # JWT Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 

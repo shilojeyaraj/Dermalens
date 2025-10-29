@@ -20,8 +20,7 @@ from infrastructure.caching import intelligent_caching_service
 from ai.vertex_ai_service import vertex_ai_service
 
 # Configuration
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import (
+from config import (
     VERTEX_AI_ENABLED, ENSEMBLE_ENABLED, PERFORMANCE_MONITORING_ENABLED
 )
 

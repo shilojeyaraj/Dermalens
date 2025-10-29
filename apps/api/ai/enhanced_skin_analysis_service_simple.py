@@ -20,7 +20,7 @@ from infrastructure.caching import intelligent_caching_service
 
 # Configuration
 try:
-    from settings import VERTEX_AI_ENABLED, ENSEMBLE_ENABLED
+    from config import VERTEX_AI_ENABLED, ENSEMBLE_ENABLED
 except ImportError:
     # Fallback values if settings module is not available
     VERTEX_AI_ENABLED = True
@@ -336,7 +336,7 @@ class EnhancedSkinAnalysisService:
             logger.info(f"   - Image quality: {quality_score:.2f}")
             logger.info(f"   - User profile available: {'✅' if user_profile else '❌'}")
             
-            # Use profile data to generate realistic conditions
+            # Always generate meaningful conditions based on profile goals and skin type
             if user_profile:
                 # Extract conditions from user profile
                 if user_profile.get("skin_concerns"):
@@ -353,10 +353,44 @@ class EnhancedSkinAnalysisService:
                         "location": "general",
                         "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
                     })
-            
-            # Add image-based conditions if no profile data
-            if not conditions:
-                # Always generate meaningful skin conditions, never technical issues
+                
+                # Always add maintenance and preventive care based on skin type
+                skin_type = user_profile.get("skin_type", "").lower()
+                if "oily" in skin_type:
+                    conditions.append({
+                        "condition": "oil_control",
+                        "confidence": 0.7,
+                        "severity": "mild",
+                        "location": "general",
+                        "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
+                    })
+                elif "dry" in skin_type:
+                    conditions.append({
+                        "condition": "hydration_boost",
+                        "confidence": 0.7,
+                        "severity": "mild",
+                        "location": "general",
+                        "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
+                    })
+                elif "sensitive" in skin_type:
+                    conditions.append({
+                        "condition": "gentle_care",
+                        "confidence": 0.7,
+                        "severity": "mild",
+                        "location": "general",
+                        "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
+                    })
+                else:
+                    # For combination or normal skin
+                    conditions.append({
+                        "condition": "balanced_care",
+                        "confidence": 0.7,
+                        "severity": "mild",
+                        "location": "general",
+                        "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
+                    })
+            else:
+                # Default conditions for users without profile data
                 conditions.extend([
                     {
                         "condition": "general_care",
@@ -366,6 +400,16 @@ class EnhancedSkinAnalysisService:
                         "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
                     }
                 ])
+            
+            # Always add preventive care and maintenance recommendations
+            if not any(c["condition"] == "preventive_care" for c in conditions):
+                conditions.append({
+                    "condition": "preventive_care",
+                    "confidence": 0.8,
+                    "severity": "mild",
+                    "location": "general",
+                    "coordinates": {"x": 0.5, "y": 0.5, "radius": 0.1}
+                })
                 
                 # Add additional conditions based on quality
                 if quality_score > 0.7:

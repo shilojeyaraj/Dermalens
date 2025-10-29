@@ -204,6 +204,7 @@ echo -n "your-supabase-key" | gcloud secrets create supabase-key --data-file=-
 echo -n "your-google-cloud-project-id" | gcloud secrets create google-cloud-project --data-file=-
 echo -n "your-elasticsearch-url" | gcloud secrets create elasticsearch-url --data-file=-
 echo -n "your-elasticsearch-username" | gcloud secrets create elasticsearch-username --data-file=-
+
 echo -n "your-elasticsearch-password" | gcloud secrets create elasticsearch-password --data-file=-
 ```
 

@@ -5,15 +5,14 @@ Uses custom database functions for authentication
 from fastapi import HTTPException, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict
-from pydantic import BaseModel, EmailStr
-import jwt
+from pydantic import BaseModel
+from jose import jwt
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
+from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 
 # Initialize Supabase client for auth operations
 supabase_auth: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -292,15 +291,15 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
 
 # Pydantic models for request/response
 class SignUpRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class SignInRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class PasswordResetRequest(BaseModel):
-    email: EmailStr
+    email: str
 
 class TokenResponse(BaseModel):
     access_token: str

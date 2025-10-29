@@ -15,7 +15,7 @@ try:
     
     print("\n2. Testing config import...")
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 'config'))
-    from settings import GOOGLE_CLOUD_PROJECT
+    from config import GOOGLE_CLOUD_PROJECT
     print("✅ Config imported")
     
     print("\n3. Testing AI service imports...")

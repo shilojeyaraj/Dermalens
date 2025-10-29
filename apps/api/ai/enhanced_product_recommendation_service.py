@@ -20,8 +20,7 @@ from infrastructure.caching import intelligent_caching_service
 from ai.vertex_ai_service import vertex_ai_service
 
 # Configuration
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import VERTEX_AI_ENABLED, ENSEMBLE_ENABLED
+from config import VERTEX_AI_ENABLED, ENSEMBLE_ENABLED
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -357,7 +356,7 @@ class EnhancedProductRecommendationService:
             
             # Search Elasticsearch
             logger.info("   - Searching Elasticsearch")
-            es_results = await self._search_elasticsearch(needs, max_recommendations // 2)
+            es_results = await self._search_elasticsearch(needs, max_recommendations)
             if es_results["success"]:
                 all_products.extend(es_results["data"])
                 sources.append("elasticsearch")
@@ -365,7 +364,7 @@ class EnhancedProductRecommendationService:
             
             # Search Google
             logger.info("   - Searching Google")
-            google_results = await self._search_google(needs, max_recommendations // 2)
+            google_results = await self._search_google(needs, max_recommendations)
             if google_results["success"]:
                 # Ensure productUrl present when possible
                 cleaned = []
@@ -445,7 +444,7 @@ class EnhancedProductRecommendationService:
             )
             
             if result["success"]:
-                products = result["data"]
+                products = result["products"]
                 logger.info(f"   - Elasticsearch found: {len(products)} products")
                 return {
                     "success": True,
@@ -483,7 +482,7 @@ class EnhancedProductRecommendationService:
             products = []
             for term in search_terms[:3]:  # Limit to 3 searches
                 try:
-                    result = await self.google_search.search_products(term, max_results=limit//3)
+                    result = self.google_search.search_products(term, max_results=limit//3)
                     if result["success"]:
                         products.extend(result["data"])
                         logger.info(f"   - Google search '{term}': {len(result['data'])} products")
@@ -792,7 +791,7 @@ class EnhancedProductRecommendationService:
             # Cache the results
             await self.caching.store_recommendation_cache(
                 conditions=needs.get("detected_conditions", []),
-                user_profile=user_profile,
+                user_profile=needs.get("user_profile"),
                 recommendations=cache_data
             )
             

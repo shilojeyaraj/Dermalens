@@ -22,7 +22,7 @@ from infrastructure.caching import intelligent_caching_service
 
 # Configuration
 try:
-    from settings import VERTEX_AI_ENABLED, ENSEMBLE_ENABLED
+    from config import VERTEX_AI_ENABLED, ENSEMBLE_ENABLED
 except ImportError:
     # Fallback values if settings module is not available
     VERTEX_AI_ENABLED = True

@@ -41,10 +41,7 @@ from google.cloud import bigquery
 import redis.asyncio as redis
 
 # Configuration
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import (
+from config import (
     GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_REGION, VERTEX_AI_ENABLED, 
     VERTEX_AI_ENDPOINT, VERTEX_AI_CACHE_ENABLED, VERTEX_AI_STREAMING_ENABLED,
     ENSEMBLE_ENABLED, MODEL_ENSEMBLE_WEIGHTS, PERFORMANCE_MONITORING_ENABLED,

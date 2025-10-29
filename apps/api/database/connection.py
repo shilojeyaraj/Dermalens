@@ -8,9 +8,8 @@ import uuid
 import sys
 import os
 
-# Add packages/config to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import (
+# Import configuration
+from config import (
     SUPABASE_URL, 
     SUPABASE_SERVICE_KEY, 
     PROFILES_TABLE, 

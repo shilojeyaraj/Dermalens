@@ -19,7 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'packages', 
 
 # Try to import config
 try:
-    from settings import (
+    from config import (
         ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG, 
         VERTEX_AI_ENABLED, VERTEX_AI_STREAMING_ENABLED, ENSEMBLE_ENABLED,
         PERFORMANCE_MONITORING_ENABLED

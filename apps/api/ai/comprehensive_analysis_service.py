@@ -13,8 +13,7 @@ import os
 from database import db_manager
 from ai.openai_analysis_service import openai_analysis_service
 from ai.gemini_analysis_service import get_gemini_service
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import GEMINI_API_KEY, GEMINI_ENABLED
+from config import GEMINI_API_KEY, GEMINI_ENABLED
 from infrastructure.google_search_service import google_search_service
 
 logging.basicConfig(level=logging.INFO)

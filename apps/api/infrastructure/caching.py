@@ -19,8 +19,7 @@ import redis.asyncio as redis
 # Configuration
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import VERTEX_AI_CACHE_ENABLED, GOOGLE_CLOUD_PROJECT
+from config import VERTEX_AI_CACHE_ENABLED, GOOGLE_CLOUD_PROJECT
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

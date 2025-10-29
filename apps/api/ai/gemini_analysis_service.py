@@ -10,8 +10,7 @@ import io
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_ENABLED
+from config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_ENABLED
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

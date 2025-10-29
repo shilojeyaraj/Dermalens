@@ -9,18 +9,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements_minimal.txt .
-RUN pip install --no-cache-dir -r requirements_minimal.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8000
 
 # Set environment variables
-ENV PORT=8080
+ENV PORT=8000
 ENV PYTHONPATH=/app
+ENV HOST=0.0.0.0
 
 # Run the application
-CMD ["python", "simple_deploy.py"]
+CMD ["python", "main.py"]

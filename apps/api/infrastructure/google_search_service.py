@@ -8,9 +8,8 @@ import logging
 import sys
 import os
 
-# Add packages/config to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'packages', 'config'))
-from settings import (
+# Configuration
+from config import (
     GOOGLE_API_KEY,
     GOOGLE_SEARCH_ENGINE_ID,
     GOOGLE_SEARCH_ENABLED,
