@@ -2,6 +2,10 @@
 Enhanced Main Application for Dermalens
 Integrates all advanced AI services including Vertex AI, streaming, ensemble models, and monitoring
 """
+# Suppress numpy warnings on Windows/Python 3.13
+import warnings
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request, BackgroundTasks, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -556,7 +560,7 @@ async def analyze_skin_multi_angle(
             skin_analysis=scan_analysis,
             user_profile=user_profile,
             recommendation_type="comprehensive",
-            max_recommendations=15,
+            max_recommendations=50,
             budget_range=None,
         )
         
@@ -887,7 +891,7 @@ async def generate_profile_recommendations(
             skin_analysis=skin_analysis,
             user_profile=user_profile,
             recommendation_type="profile_based",
-            max_recommendations=25,
+            max_recommendations=50,
             budget_range=None,
         )
 
@@ -1046,20 +1050,48 @@ async def products_search(
 
 @app.get("/products/trending")
 async def products_trending(
-    limit: int = 12
+    limit: int = 50,
+    brands: Optional[List[str]] = Query(None, alias="brands"),
+    brand: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None
 ):
-    """Return a simple set of trending products from Elasticsearch by rating/reviews."""
+    """Return a simple set of trending products from Elasticsearch by rating/reviews, with optional brand and price filters."""
     try:
+        # Build price range filter if provided
+        price_range = None
+        if min_price is not None or max_price is not None:
+            price_range = {}
+            if min_price is not None:
+                price_range["gte"] = float(min_price)
+            if max_price is not None:
+                price_range["lte"] = float(max_price)
+        
         data = elasticsearch_service.search_products(
             query="",
             skin_conditions=None,
             skin_types=None,
             product_types=None,
-            price_range=None,
+            price_range=price_range,
             min_rating=4.2,
             size=limit,
         )
         products = data.get("products", []) if data.get("success") else []
+        
+        # Post-filter by brands when requested
+        brand_filters: List[str] = []
+        if brands:
+            for b in brands:
+                if isinstance(b, str):
+                    brand_filters.extend([s.strip() for s in b.split(",") if s.strip()])
+        elif brand:
+            brand_filters = [brand]
+        if brand_filters and products:
+            requested_set = {b.lower() for b in brand_filters}
+            products = [
+                p for p in products
+                if p.get("brand", "").lower() in requested_set or any(rb in p.get("brand", "").lower() for rb in requested_set)
+            ]
         # Normalize like above
         def _map_product(p):
             price_val = p.get("price")
@@ -1181,7 +1213,7 @@ async def analyze_comprehensive_enhanced(
             skin_analysis=skin_analysis,
             user_profile=None,  # Will be fetched in the service
             recommendation_type="comprehensive",
-            max_recommendations=10
+            max_recommendations=50
         )
         
         if not recommendations_result["success"]:
@@ -1264,7 +1296,7 @@ async def search_products_enhanced(
                 skin_analysis={"detected_conditions": conditions},
                 user_profile=user_profile,
                 recommendation_type=search_type,
-                max_recommendations=request.get("limit", 10)
+                max_recommendations=request.get("limit", 25)
             )
             
             # Track performance
@@ -1326,7 +1358,7 @@ async def generate_routine_enhanced(
             skin_analysis=skin_analysis,
             user_profile=user_profile,
             recommendation_type="routine",
-            max_recommendations=20
+            max_recommendations=50
         )
         
         if not recommendations.get("success", False):
@@ -1674,13 +1706,37 @@ async def get_skin_profile(current_user: dict = Depends(get_current_user)):
     """Get user skin profile"""
     return await db_manager.get_skin_profile(current_user["id"])
 
+@app.post("/skin-profile")
+async def create_skin_profile(
+    request: SkinProfileCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create user skin profile"""
+    result = await db_manager.create_skin_profile(current_user["id"], request.dict(exclude_unset=True))
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result.get("error", "Failed to create skin profile"))
+    return result
+
 @app.put("/skin-profile")
 async def update_skin_profile(
     request: SkinProfileUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update user skin profile"""
-    return await db_manager.update_skin_profile(current_user["id"], request)
+    """Update user skin profile (creates if doesn't exist)"""
+    # Try to get existing profile
+    existing = await db_manager.get_skin_profile(current_user["id"])
+    if not existing["success"] or not existing["data"]:
+        # Profile doesn't exist, create it
+        result = await db_manager.create_skin_profile(current_user["id"], request.dict(exclude_unset=True))
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to create skin profile"))
+        return result
+    else:
+        # Profile exists, update it
+        result = await db_manager.update_skin_profile(current_user["id"], request.dict(exclude_unset=True))
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to update skin profile"))
+        return result
 
 # Application startup
 @app.on_event("startup")
@@ -1692,6 +1748,68 @@ async def startup_event():
     logger.info(f"   - Ensemble: {'✅' if ENSEMBLE_ENABLED else '❌'}")
     logger.info(f"   - Monitoring: {'✅' if PERFORMANCE_MONITORING_ENABLED else '❌'}")
 
+# Manual seeding endpoint
+@app.post("/admin/seed-elasticsearch")
+async def manual_seed_elasticsearch(
+    current_user_id: str = Depends(get_current_user_id)
+):
+    """Manually trigger Elasticsearch seeding"""
+    if not SEEDING_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Seeding not available")
+    
+    try:
+        logger.info("🌱 Manual seeding triggered")
+        
+        # Generate and seed products
+        products = generate_sample_products(1000)
+        seed_result = seed_elasticsearch(products)
+        
+        if isinstance(seed_result, dict):
+            if seed_result.get("success"):
+                return {
+                    "success": True,
+                    "message": f"Successfully seeded {seed_result.get('total_indexed', len(products))} products",
+                    "products_seeded": seed_result.get("total_indexed", len(products)),
+                    "timestamp": datetime.now().isoformat()
+                }
+            else:
+                # Return error details from seed_elasticsearch
+                return {
+                    "success": False,
+                    "error": seed_result.get("error", "Seeding failed"),
+                    "error_type": "ElasticsearchError",
+                    "details": seed_result.get("traceback", "")
+                }
+        elif seed_result:
+            # Backward compatibility - if it returns True
+            return {
+                "success": True,
+                "message": f"Successfully seeded {len(products)} products",
+                "products_seeded": len(products),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Seeding failed without error details",
+                "error_type": "UnknownError"
+            }
+            
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        error_msg = f"Seeding error: {str(e)}"
+        logger.error(f"❌ Manual seeding error: {e}")
+        logger.error(f"❌ Traceback: {error_details}")
+        
+        # Return a more readable error
+        return {
+            "success": False,
+            "error": error_msg,
+            "error_type": type(e).__name__,
+            "message": "Check backend logs for full details"
+        }
+
 # Application shutdown
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1700,13 +1818,34 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import os
-    port = int(os.environ.get("PORT", API_PORT))
-    host = os.environ.get("HOST", API_HOST)
+    import sys
     
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        reload=DEBUG,
-        log_level="info"
-    )
+    # Suppress numpy warnings on Windows/Python 3.13
+    import warnings
+    warnings.filterwarnings('ignore', category=RuntimeWarning)
+    
+    try:
+        port = int(os.environ.get("PORT", API_PORT))
+        host = os.environ.get("HOST", API_HOST)
+        
+        print("🚀 Starting Dermalens API Server...")
+        print(f"   🌐 Server will be available at: http://{host}:{port}")
+        print(f"   📖 API docs will be available at: http://{host}:{port}/docs")
+        print(f"   ⏹️  Press Ctrl+C to stop")
+        print("-" * 60)
+        
+        uvicorn.run(
+            "main:app",
+            host=host,
+            port=port,
+            reload=DEBUG,
+            log_level="info"
+        )
+    except KeyboardInterrupt:
+        print("\n⏹️  Server stopped by user")
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n❌ Error starting server: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

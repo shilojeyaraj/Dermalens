@@ -1,11 +1,13 @@
 @echo off
-echo 🚀 Starting Dermalens API...
+echo 🚀 Starting Dermalens API Server...
 echo.
-echo 📁 Working directory: %CD%
-echo 🌐 API will be available at: http://localhost:8000
-echo 📖 API docs at: http://localhost:8000/docs
-echo ⏹️  Press Ctrl+C to stop
-echo.
-python minimal_main.py
-pause
 
+cd /d "%~dp0"
+
+REM Suppress Python warnings for cleaner output
+set PYTHONWARNINGS=ignore
+
+REM Start the server
+python main.py
+
+pause
