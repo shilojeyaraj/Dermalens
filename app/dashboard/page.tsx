@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ProductSearch } from "@/components/product-search"
+import { Header } from "@/components/header"
 import { Loader2, TrendingUp, AlertCircle, CheckCircle2, Sparkles, ArrowRight, Repeat2, ShoppingCart } from "lucide-react"
 
 interface SkinAnalysisResult {
@@ -32,6 +33,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState<'all' | 'recommended'>('all')
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 150])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filtersApplied, setFiltersApplied] = useState(0)
 
   useEffect(() => {
     // Load analysis from localStorage
@@ -42,18 +47,110 @@ export default function DashboardPage() {
       try {
         const parsedAnalysis = JSON.parse(storedAnalysis)
         console.log('🔍 [DASHBOARD] Parsed analysis data:', parsedAnalysis)
-        console.log('🔍 [DASHBOARD] Detected conditions:', parsedAnalysis.detected_conditions)
-        console.log('🔍 [DASHBOARD] Skin health score:', parsedAnalysis.skin_health_score)
-        console.log('🔍 [DASHBOARD] AI report:', parsedAnalysis.ai_report)
-        setAnalysis(parsedAnalysis)
+        
+        // Normalize the analysis data structure - handle both face scan and profile-based data
+        let normalizedAnalysis;
+        
+        if (parsedAnalysis.multi_angle_analysis && parsedAnalysis.results && parsedAnalysis.results.length > 0) {
+          // Face scan analysis data structure
+          const firstResult = parsedAnalysis.results[0];
+          const analysis = firstResult.analysis;
+          
+          normalizedAnalysis = {
+            success: parsedAnalysis.success || true,
+            analysis_type: "multi_angle_scan",
+            detected_conditions: analysis?.detected_conditions || ["general_care"],
+            recommended_products: parsedAnalysis.recommended_products || [],
+            skincare_routine: parsedAnalysis.skincare_routine || { morning_routine: [], evening_routine: [] },
+            ai_report: parsedAnalysis.ai_report || "Based on your face scan analysis, here are personalized recommendations for your skin.",
+            skin_health_score: typeof analysis?.skin_health_score === 'number' ? analysis.skin_health_score : 0.7,
+            analysis_timestamp: parsedAnalysis.analysis_timestamp || new Date().toISOString(),
+            analysis_notes: parsedAnalysis.analysis_notes || {
+              image_analysis_contribution: "Multi-angle face scan analysis",
+              profile_enhancement: "Recommendations based on your face scan results",
+              recommendation_basis: "Personalized suggestions based on your skin analysis"
+            }
+          };
+        } else {
+          // Profile-based or other analysis data structure
+          normalizedAnalysis = {
+            success: parsedAnalysis.success || true,
+            analysis_type: parsedAnalysis.analysis_type || "profile_based",
+            detected_conditions: parsedAnalysis.detected_conditions || parsedAnalysis.needs_analysis?.detected_conditions || ["general_care"],
+            recommended_products: parsedAnalysis.recommended_products || parsedAnalysis.recommendations || [],
+            skincare_routine: parsedAnalysis.skincare_routine || { morning_routine: [], evening_routine: [] },
+            ai_report: parsedAnalysis.ai_report || "Based on your profile, here are personalized recommendations for your skin type and concerns.",
+            skin_health_score: typeof parsedAnalysis.skin_health_score === 'number' ? parsedAnalysis.skin_health_score : 
+                              (typeof parsedAnalysis.needs_analysis?.skin_health_score === 'number' ? parsedAnalysis.needs_analysis.skin_health_score : 0.7),
+            analysis_timestamp: parsedAnalysis.analysis_timestamp || new Date().toISOString(),
+            analysis_notes: parsedAnalysis.analysis_notes || {
+              image_analysis_contribution: "Profile-based analysis",
+              profile_enhancement: "Recommendations based on your skin profile",
+              recommendation_basis: "Personalized suggestions for your skin type and concerns"
+            }
+          };
+        }
+        
+        console.log('🔍 [DASHBOARD] Normalized analysis:', normalizedAnalysis)
+        console.log('🔍 [DASHBOARD] Detected conditions:', normalizedAnalysis.detected_conditions)
+        console.log('🔍 [DASHBOARD] Skin health score:', normalizedAnalysis.skin_health_score)
+        console.log('🔍 [DASHBOARD] AI report:', normalizedAnalysis.ai_report)
+        setAnalysis(normalizedAnalysis)
         setError(null)
       } catch (err) {
         console.error('🔍 [DASHBOARD] Failed to parse analysis:', err)
         setError("Failed to load analysis results")
       }
     } else {
-      console.log('🔍 [DASHBOARD] No analysis found in localStorage')
-      setError("No analysis results found. Please run a scan first.")
+      console.log('🔍 [DASHBOARD] No analysis found in localStorage, generating profile-based recommendations')
+      // Generate profile-based recommendations for users who skipped face scan
+      const generateProfileRecommendations = async () => {
+        try {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://dermalens-backend-941238576063.us-central1.run.app'}/generate-profile-recommendations`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          })
+          
+          if (response.ok) {
+            const profileData = await response.json()
+            console.log('🔍 [DASHBOARD] Profile recommendations received:', profileData)
+            
+            // Store the profile-based analysis in localStorage
+            localStorage.setItem('skinAnalysis', JSON.stringify(profileData))
+            
+            // Normalize the profile data structure
+            const normalizedAnalysis = {
+              success: profileData.success || true,
+              analysis_type: "profile_based",
+              detected_conditions: profileData.needs_analysis?.detected_conditions || ["general_care"],
+              recommended_products: profileData.recommendations || [],
+              skincare_routine: profileData.skincare_routine || { morning_routine: [], evening_routine: [] },
+              ai_report: "Based on your profile, here are personalized recommendations for your skin type and concerns.",
+              skin_health_score: profileData.needs_analysis?.skin_health_score || 0.7,
+              analysis_timestamp: profileData.timestamp || new Date().toISOString(),
+              analysis_notes: {
+                image_analysis_contribution: "Profile-based analysis",
+                profile_enhancement: "Recommendations based on your skin profile",
+                recommendation_basis: "Personalized suggestions for your skin type and concerns"
+              }
+            }
+            
+            console.log('🔍 [DASHBOARD] Normalized profile analysis:', normalizedAnalysis)
+            setAnalysis(normalizedAnalysis)
+            setError(null)
+          } else {
+            console.error('🔍 [DASHBOARD] Failed to get profile recommendations:', response.status)
+            setError("Failed to generate profile-based recommendations. Please try again.")
+          }
+        } catch (err) {
+          console.error('🔍 [DASHBOARD] Error generating profile recommendations:', err)
+          setError("Failed to generate profile-based recommendations. Please try again.")
+        }
+      }
+      generateProfileRecommendations()
     }
     setLoading(false)
   }, [])
@@ -80,7 +177,7 @@ export default function DashboardPage() {
                 <AlertCircle className="w-8 h-8 text-red-600 flex-shrink-0 mt-1" />
                 <div>
                   <h3 className="font-bold text-red-900 mb-2">{error}</h3>
-                  <Button onClick={() => router.push('/scan')} className="mt-4">
+                  <Button onClick={() => router.push('/scan')} className="mt-4 bg-green-600 hover:bg-green-700 text-white">
                     Start New Scan
                   </Button>
                 </div>
@@ -94,6 +191,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Header />
       {/* Top Navigation Bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -108,257 +206,13 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-4">
-            <Button onClick={() => router.push('/scan')} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={() => router.push('/scan')} className="bg-green-600 hover:bg-green-700 text-white">
               Face Scan
             </Button>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Repeat2 className="w-4 h-4" />
-                  Your Skincare Routine
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3 text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-                    <Sparkles className="w-6 h-6 text-green-500" />
-                    Your AI-Powered Skincare Routine
-                  </DialogTitle>
-                  <p className="text-gray-600 mt-2">Personalized for your skin type and concerns</p>
-                </DialogHeader>
-                <div className="space-y-8">
-                  {/* Morning Routine */}
-                  <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-6 border-2 border-yellow-200">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-lg">🌅</span>
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">Morning Routine</h3>
-                        <p className="text-sm text-gray-600">Start your day with healthy skin</p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      {(() => {
-                        const routine = (analysis as any)?.skincare_routine
-                        console.log('🔍 [ROUTINE] Full routine data:', routine)
-                        const morning = Array.isArray(routine?.morning) ? routine.morning : []
-                        console.log('🔍 [ROUTINE] Morning routine:', morning)
-                        return morning.map((step: any, idx: number) => (
-                          <div key={idx} className="bg-white rounded-lg p-4 border border-yellow-200 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-shrink-0">
-                                <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                  {step.step || idx + 1}
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between mb-2">
-                                  <h4 className="font-bold text-gray-900 text-lg">{step.action || step.name || `Step ${step.step || idx + 1}`}</h4>
-                                  {step.duration ? (
-                                    <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                                      <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                                      {step.duration}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                {step.instructions ? (
-                                  <p className="text-gray-700 mb-3 leading-relaxed">{step.instructions}</p>
-                                ) : null}
-                                {step.product ? (
-                                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                                    <p className="text-sm font-semibold text-blue-900 mb-1">💄 Recommended Product:</p>
-                                    <p className="text-blue-800">{step.product}</p>
-                                  </div>
-                                ) : null}
-                                {step.tips ? (
-                                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                    <p className="text-sm font-semibold text-green-900 mb-1">💡 Pro Tip:</p>
-                                    <p className="text-green-800 text-sm italic">{step.tips}</p>
-                                  </div>
-                                ) : null}
-                                {step.url ? (
-                                  <a href={step.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium mt-2">
-                                    <span>Shop Product</span>
-                                    <ArrowRight className="w-4 h-4" />
-                                  </a>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      })()}
-                    </div>
-                  </div>
-                  {/* Evening Routine */}
-                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 border-2 border-purple-200">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-indigo-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-lg">🌙</span>
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">Evening Routine</h3>
-                        <p className="text-sm text-gray-600">Repair and restore while you sleep</p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      {(() => {
-                        const routine = (analysis as any)?.skincare_routine
-                        console.log('🔍 [ROUTINE] Evening routine:', routine?.evening)
-                        const evening = Array.isArray(routine?.evening) ? routine.evening : []
-                        return evening.map((step: any, idx: number) => (
-                          <div key={idx} className="bg-white rounded-lg p-4 border border-purple-200 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-shrink-0">
-                                <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                  {step.step || idx + 1}
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-start justify-between mb-2">
-                                  <h4 className="font-bold text-gray-900 text-lg">{step.action || step.name || `Step ${step.step || idx + 1}`}</h4>
-                                  {step.duration ? (
-                                    <span className="bg-purple-100 text-purple-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                                      <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                                      {step.duration}
-                                    </span>
-                                  ) : null}
-                                </div>
-                                {step.instructions ? (
-                                  <p className="text-gray-700 mb-3 leading-relaxed">{step.instructions}</p>
-                                ) : null}
-                                {step.product ? (
-                                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                                    <p className="text-sm font-semibold text-blue-900 mb-1">💄 Recommended Product:</p>
-                                    <p className="text-blue-800">{step.product}</p>
-                                  </div>
-                                ) : null}
-                                {step.tips ? (
-                                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                    <p className="text-sm font-semibold text-green-900 mb-1">💡 Pro Tip:</p>
-                                    <p className="text-green-800 text-sm italic">{step.tips}</p>
-                                  </div>
-                                ) : null}
-                                {step.url ? (
-                                  <a href={step.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium mt-2">
-                                    <span>Shop Product</span>
-                                    <ArrowRight className="w-4 h-4" />
-                                  </a>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      })()}
-                    </div>
-                  </div>
-                  
-                  {/* Weekly Routine */}
-                  {(() => {
-                    const routine = (analysis as any)?.skincare_routine
-                    const weekly = Array.isArray(routine?.weekly) ? routine.weekly : []
-                    if (weekly.length > 0) {
-                      return (
-                        <div className="bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl p-6 border-2 border-pink-200">
-                          <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-rose-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-lg">✨</span>
-                            </div>
-                            <div>
-                              <h3 className="text-xl font-bold text-gray-900">Weekly Treatments</h3>
-                              <p className="text-sm text-gray-600">Extra care for optimal skin health</p>
-                            </div>
-                          </div>
-                          <div className="space-y-4">
-                            {weekly.map((step: any, idx: number) => (
-                              <div key={idx} className="bg-white rounded-lg p-4 border border-pink-200 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="flex items-start gap-4">
-                                  <div className="flex-shrink-0">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-pink-400 to-rose-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                      {step.step || idx + 1}
-                                    </div>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex items-start justify-between mb-2">
-                                      <h4 className="font-bold text-gray-900 text-lg">{step.action || step.name || `Step ${step.step || idx + 1}`}</h4>
-                                      {step.duration ? (
-                                        <span className="bg-pink-100 text-pink-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                                          <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
-                                          {step.duration}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    {step.instructions ? (
-                                      <p className="text-gray-700 mb-3 leading-relaxed">{step.instructions}</p>
-                                    ) : null}
-                                    {step.product ? (
-                                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                                        <p className="text-sm font-semibold text-blue-900 mb-1">💄 Recommended Product:</p>
-                                        <p className="text-blue-800">{step.product}</p>
-                                      </div>
-                                    ) : null}
-                                    {step.tips ? (
-                                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                        <p className="text-sm font-semibold text-green-900 mb-1">💡 Pro Tip:</p>
-                                        <p className="text-green-800 text-sm italic">{step.tips}</p>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
-                  
-                  {/* Tips Section */}
-                  {(() => {
-                    const routine = (analysis as any)?.skincare_routine
-                    const tips = Array.isArray(routine?.tips) ? routine.tips : []
-                    if (tips.length > 0) {
-                      return (
-                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200">
-                          <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                              <span className="text-white text-lg">💡</span>
-                            </div>
-                            <div>
-                              <h3 className="text-xl font-bold text-gray-900">Pro Tips</h3>
-                              <p className="text-sm text-gray-600">Expert advice for better results</p>
-                            </div>
-                          </div>
-                          <div className="grid gap-3">
-                            {tips.map((tip: string, idx: number) => (
-                              <div key={idx} className="bg-white rounded-lg p-4 border border-green-200 shadow-sm">
-                                <div className="flex items-start gap-3">
-                                  <div className="flex-shrink-0 w-6 h-6 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                                    <span className="text-white text-xs font-bold">{idx + 1}</span>
-                                  </div>
-                                  <p className="text-gray-700 leading-relaxed">{tip}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
-                </div>
-              </DialogContent>
-            </Dialog>
-            
-            <Button className="bg-green-600 hover:bg-green-700 text-white rounded-full w-10 h-10 p-0">
-              <Sparkles className="w-5 h-5" />
+            <Button onClick={() => router.push('/products')} variant="outline" className="flex items-center gap-2">
+              <ShoppingCart className="w-4 h-4" />
+              Browse Products
             </Button>
-            
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
-              <span className="text-sm font-medium">Profile</span>
-            </div>
           </div>
         </div>
       </div>
@@ -463,7 +317,9 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="prose prose-sm max-w-none">
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                    {analysis.ai_report}
+                    {analysis.ai_report || analysis.analysis_notes?.image_analysis_contribution || 
+                     analysis.analysis_notes?.profile_enhancement || 
+                     "Based on your face scan analysis, here are personalized recommendations for your skin."}
                   </p>
                 </div>
               </CardContent>
@@ -471,8 +327,92 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Skincare Routine Section */}
+        {analysis.skincare_routine && (
+          <div className="mb-8">
+            <Card className="bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3 text-2xl font-bold text-green-800">
+                  <Repeat2 className="w-6 h-6 text-green-600" />
+                  Your Personalized Skincare Routine
+                </CardTitle>
+                <p className="text-green-700">Daily routine tailored to your skin needs</p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Morning Routine */}
+                  <div className="bg-white rounded-lg p-4 border border-green-200">
+                    <h4 className="font-bold text-green-800 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
+                      Morning Routine
+                    </h4>
+                    {analysis.skincare_routine.morning_routine && analysis.skincare_routine.morning_routine.length > 0 ? (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {analysis.skincare_routine.morning_routine.map((step: any, index: number) => (
+                          <div key={index} className="border-l-4 border-green-300 pl-4 py-2">
+                            <div className="font-semibold text-gray-900">{step.name}</div>
+                            {step.product && (
+                              <div className="text-sm text-gray-600 mb-1">
+                                <strong>Product:</strong> {step.product}
+                                {step.brand && <span> by {step.brand}</span>}
+                              </div>
+                            )}
+                            {step.instructions && (
+                              <div className="text-sm text-gray-700">{step.instructions}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-600 mb-4">No morning routine generated yet</p>
+                        <Button onClick={() => router.push('/scan')} className="bg-green-600 hover:bg-green-700 text-white">
+                          Start Analysis
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Evening Routine */}
+                  <div className="bg-white rounded-lg p-4 border border-green-200">
+                    <h4 className="font-bold text-green-800 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                      Evening Routine
+                    </h4>
+                    {analysis.skincare_routine.evening_routine && analysis.skincare_routine.evening_routine.length > 0 ? (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {analysis.skincare_routine.evening_routine.map((step: any, index: number) => (
+                          <div key={index} className="border-l-4 border-green-300 pl-4 py-2">
+                            <div className="font-semibold text-gray-900">{step.name}</div>
+                            {step.product && (
+                              <div className="text-sm text-gray-600 mb-1">
+                                <strong>Product:</strong> {step.product}
+                                {step.brand && <span> by {step.brand}</span>}
+                              </div>
+                            )}
+                            {step.instructions && (
+                              <div className="text-sm text-gray-700">{step.instructions}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-gray-600 mb-4">No evening routine generated yet</p>
+                        <Button onClick={() => router.push('/scan')} className="bg-green-600 hover:bg-green-700 text-white">
+                          Start Analysis
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Product Recommendations Section */}
-        {analysis.recommended_products && analysis.recommended_products.length > 0 && (
+        {(analysis.recommended_products && analysis.recommended_products.length > 0) ? (
           <div className="mb-8">
             <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200">
               <CardHeader>
@@ -544,6 +484,31 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+        ) : (
+          <div className="mb-8">
+            <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3 text-2xl font-bold text-blue-800">
+                  <Sparkles className="w-6 h-6 text-blue-600" />
+                  Get Personalized Recommendations
+                </CardTitle>
+                <p className="text-blue-700">Complete your profile and run a skin analysis to get personalized product recommendations</p>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <p className="text-gray-600 mb-4">No personalized recommendations yet</p>
+                  <div className="flex gap-4 justify-center">
+                    <Button onClick={() => router.push('/scan')} className="bg-green-600 hover:bg-green-700 text-white">
+                      Start Face Scan
+                    </Button>
+                    <Button onClick={() => router.push('/settings')} variant="outline">
+                      Complete Profile
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Main Content Layout */}
@@ -551,19 +516,6 @@ export default function DashboardPage() {
           {/* Left Sidebar - Filters */}
           <div className="lg:col-span-1">
             <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Search</h3>
-              <div className="relative mb-6">
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              </div>
 
               <h3 className="font-semibold text-gray-900 mb-4">Filter by</h3>
               <div className="space-y-3 mb-6">
@@ -598,7 +550,18 @@ export default function DashboardPage() {
               <div className="space-y-2 mb-6">
                 {['CeraVe', 'EltaMD', 'La Roche-Posay', 'Neutrogena', "Paula's Choice", 'The Ordinary'].map((brand) => (
                   <label key={brand} className="flex items-center">
-                    <input type="checkbox" className="mr-2" />
+                    <input 
+                      type="checkbox" 
+                      className="mr-2" 
+                      checked={selectedBrands.includes(brand)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedBrands([...selectedBrands, brand])
+                        } else {
+                          setSelectedBrands(selectedBrands.filter(b => b !== brand))
+                        }
+                      }}
+                    />
                     <span className="text-sm text-gray-700">{brand}</span>
                   </label>
                 ))}
@@ -609,23 +572,39 @@ export default function DashboardPage() {
                 <input
                   type="range"
                   min="0"
-                  max="100"
+                  max="150"
+                  value={priceRange[1]}
+                  onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>$0.00</span>
-                  <span>$50.00</span>
+                  <span>${priceRange[0]}</span>
+                  <span>${priceRange[1]}</span>
                 </div>
               </div>
+
+              {/* Apply Filters Button */}
+              <Button 
+                onClick={() => {
+                  // Trigger product refresh with filters by updating the timestamp
+                  setFiltersApplied(Date.now())
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 mt-4"
+              >
+                Apply Filters
+              </Button>
             </div>
           </div>
 
                  {/* Right Content - Real Product Search */}
                  <div className="lg:col-span-3">
                   <ProductSearch 
-                    initialQuery={(analysis.detected_conditions ?? []).join(' ')}
+                    initialQuery={searchQuery}
                     activeFilter={activeFilter}
                     recommendedProducts={analysis.recommended_products || []}
+                    selectedBrands={selectedBrands}
+                    priceRange={priceRange}
+                    refreshTrigger={filtersApplied ? Date.now() : 0}
                     onProductSelect={(product) => {
                        console.log('Selected product:', product)
                        // Handle product selection
@@ -634,27 +613,6 @@ export default function DashboardPage() {
                  </div>
         </div>
 
-        {/* Skincare Routine Section */}
-        {analysis.skincare_routine && (
-          <div className="mt-12">
-            <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Repeat2 className="w-5 h-5 text-green-600" />
-                Your Personalized Skincare Routine
-              </h3>
-              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                <div className="prose prose-sm max-w-none">
-                  <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {typeof analysis.skincare_routine === 'string' 
-                      ? analysis.skincare_routine
-                      : JSON.stringify(analysis.skincare_routine, null, 2)
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Analysis Details in Hidden Section */}
         {analysis.analysis_notes && (
@@ -670,15 +628,15 @@ export default function DashboardPage() {
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="font-semibold text-blue-800 mb-1">Image Analysis:</p>
-                    <p className="text-blue-700">{analysis.analysis_notes.image_analysis_contribution}</p>
+                    <p className="text-blue-700">{analysis.analysis_notes?.image_analysis_contribution}</p>
                   </div>
                   <div>
                     <p className="font-semibold text-blue-800 mb-1">Profile Enhancement:</p>
-                    <p className="text-blue-700">{analysis.analysis_notes.profile_enhancement}</p>
+                    <p className="text-blue-700">{analysis.analysis_notes?.profile_enhancement}</p>
                   </div>
                   <div className="md:col-span-2">
                     <p className="font-semibold text-blue-800 mb-1">Recommendation Basis:</p>
-                    <p className="text-blue-700">{analysis.analysis_notes.recommendation_basis}</p>
+                    <p className="text-blue-700">{analysis.analysis_notes?.recommendation_basis}</p>
                   </div>
                 </div>
               </CardContent>
@@ -701,4 +659,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

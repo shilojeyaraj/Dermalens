@@ -43,24 +43,42 @@ interface ProductSearchProps {
   initialQuery?: string
   activeFilter?: 'all' | 'recommended'
   recommendedProducts?: any[]
+  selectedBrands?: string[]
+  priceRange?: [number, number]
+  onFiltersApplied?: () => void
+  refreshTrigger?: number
 }
 
-export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter = 'all', recommendedProducts = [] }: ProductSearchProps) {
+export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter = 'all', recommendedProducts = [], selectedBrands = [], priceRange = [0, 150], onFiltersApplied, refreshTrigger }: ProductSearchProps) {
   const [searchQuery, setSearchQuery] = useState(initialQuery)
   const [products, setProducts] = useState<Product[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState<string>("")
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
+  const [internalSelectedBrands, setInternalSelectedBrands] = useState<string[]>(selectedBrands)
   const [minPrice, setMinPrice] = useState<string>("")
   const [maxPrice, setMaxPrice] = useState<string>("")
   const [selectedSkinType, setSelectedSkinType] = useState<string>("")
   const [minRating, setMinRating] = useState<string>("")
   const [sort, setSort] = useState<string>("rating_desc")
   const [page, setPage] = useState<number>(1)
+
+  // Sync props with internal state (for brand and price filters from dashboard)
+  useEffect(() => {
+    if (selectedBrands.length > 0 || selectedBrands.length === 0) {
+      setInternalSelectedBrands(selectedBrands)
+    }
+  }, [selectedBrands, priceRange])
+
+  // Use priceRange prop when available, otherwise use local state
+  const effectivePriceRange = priceRange[0] !== 0 || priceRange[1] !== 150 ? priceRange : [
+    minPrice ? parseFloat(minPrice) : 0,
+    maxPrice ? parseFloat(maxPrice) : 150
+  ]
 
   const categories = [
     "Cleanser", "Moisturizer", "Serum", "Sunscreen", 
@@ -80,6 +98,110 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
     "Normal", "Dry", "Oily", "Combination", "Sensitive", "All Skin Types"
   ]
 
+  // Initialize filteredProducts when products change
+  useEffect(() => {
+    setFilteredProducts(products)
+  }, [products])
+
+  // Auto-search when filters change or when products change
+  useEffect(() => {
+    if (products.length > 0) {
+      applyFiltersToProducts()
+    }
+  }, [internalSelectedBrands, priceRange, activeFilter, selectedCategory, selectedSkinType, minRating, sort, products])
+
+  const applyFiltersToProducts = () => {
+    // Determine source products based on activeFilter
+    let sourceProducts: Product[] = []
+    
+    if (activeFilter === 'recommended' && recommendedProducts.length > 0) {
+      // Use recommended products as source
+      sourceProducts = recommendedProducts.map((rec: any) => ({
+        name: rec.name || rec.product_name || "Unknown Product",
+        brand: rec.brand || "Unknown Brand",
+        price: rec.price || "$0.00",
+        category: rec.category || rec.product_type || "Unknown",
+        description: rec.reason || rec.description || "",
+        rating: rec.rating || 4.0,
+        reviewCount: rec.review_count || 0,
+        imageUrl: rec.image_url || rec.imageUrl || "/skincarelogo.jpeg",
+        productUrl: rec.url || rec.product_url || "",
+        source: "recommended",
+        inStock: true,
+        size: rec.size || "Standard",
+        ingredients: rec.key_ingredients || rec.ingredients || [],
+        skinType: Array.isArray(rec.skin_types) ? rec.skin_types.join(", ") : (rec.skin_types || "All Skin Types"),
+        keyBenefits: rec.key_benefits || [rec.reason].filter(Boolean)
+      }))
+    } else {
+      // Use regular products from API
+      sourceProducts = [...products]
+    }
+    
+    let filtered = [...sourceProducts]
+    
+    // Apply brand filter
+    if (internalSelectedBrands.length > 0) {
+      filtered = filtered.filter(product => 
+        internalSelectedBrands.some(brand => 
+          product.brand.toLowerCase().includes(brand.toLowerCase())
+        )
+      )
+    }
+    
+    // Apply price filter using effective price range
+    const [minPriceValue, maxPriceValue] = effectivePriceRange
+    filtered = filtered.filter(product => {
+      const priceStr = product.price.toString().replace('$', '').trim()
+      const price = parseFloat(priceStr) || 0
+      return price >= minPriceValue && price <= maxPriceValue
+    })
+    
+    // Apply category filter
+    if (selectedCategory) {
+      filtered = filtered.filter(product => 
+        product.category === selectedCategory
+      )
+    }
+    
+    // Apply skin type filter
+    if (selectedSkinType) {
+      filtered = filtered.filter(product => 
+        product.skinType === selectedSkinType || product.skinType === "All Skin Types"
+      )
+    }
+    
+    // Apply rating filter
+    if (minRating) {
+      const minRatingNum = parseFloat(minRating)
+      filtered = filtered.filter(product => 
+        product.rating >= minRatingNum
+      )
+    }
+    
+    // Apply sorting
+    if (sort === "rating_desc") {
+      filtered.sort((a, b) => b.rating - a.rating)
+    } else if (sort === "price_asc") {
+      filtered.sort((a, b) => {
+        const priceA = parseFloat(a.price.toString().replace('$', '').trim()) || 0
+        const priceB = parseFloat(b.price.toString().replace('$', '').trim()) || 0
+        return priceA - priceB
+      })
+    } else if (sort === "price_desc") {
+      filtered.sort((a, b) => {
+        const priceA = parseFloat(a.price.toString().replace('$', '').trim()) || 0
+        const priceB = parseFloat(b.price.toString().replace('$', '').trim()) || 0
+        return priceB - priceA
+      })
+    } else if (sort === "reviews_desc") {
+      filtered.sort((a, b) => b.reviewCount - a.reviewCount)
+    }
+    
+    // Update filtered products state
+    setFilteredProducts(filtered)
+  }
+
   const searchProducts = async () => {
     if (!searchQuery.trim()) return
 
@@ -93,22 +215,25 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
       })
 
       if (selectedCategory) params.append("category", selectedCategory)
-      if (selectedBrands.length) params.append("brands", selectedBrands.join(","))
-      if (minPrice) params.append("min_price", minPrice)
-      if (maxPrice) params.append("max_price", maxPrice)
+      if (internalSelectedBrands.length) params.append("brands", internalSelectedBrands.join(","))
+      // Use effective price range for API call
+      const [apiMinPrice, apiMaxPrice] = effectivePriceRange
+      if (apiMinPrice > 0) params.append("min_price", apiMinPrice.toString())
+      if (apiMaxPrice < 150) params.append("max_price", apiMaxPrice.toString())
       if (selectedSkinType) params.append("skin_type", selectedSkinType)
       if (minRating) params.append("rating_min", minRating)
       if (sort) params.append("sort", sort)
       if (page) params.append("page", String(page))
 
       const token = localStorage.getItem('token')
-      const response = await fetch(`http://localhost:8000/products/search?${params}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/products/search?${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined
       })
       const data = await response.json()
 
       if (data.success) {
         setProducts(data.products)
+        getFilteredProducts(data.products)
       } else {
         setError(data.error || "Failed to search products")
       }
@@ -126,14 +251,32 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch("http://localhost:8000/products/trending", {
+      
+      // Build query params with filters
+      const params = new URLSearchParams({
+        limit: "50"
+      })
+      
+      // Add brand filters if any selected
+      if (internalSelectedBrands.length > 0) {
+        params.append("brands", internalSelectedBrands.join(","))
+      }
+      
+      // Add price range filters
+      const [apiMinPrice, apiMaxPrice] = effectivePriceRange
+      if (apiMinPrice > 0) params.append("min_price", apiMinPrice.toString())
+      if (apiMaxPrice < 150) params.append("max_price", apiMaxPrice.toString())
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/products/trending?${params}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined
       })
       const data = await response.json()
 
       if (data.success) {
-        setProducts(data.trending_products)
+        setProducts(data.trending_products || [])
         setSearchQuery("")
+        // Apply filters after loading
+        applyFiltersToProducts()
       } else {
         setError(data.error || "Failed to load trending products")
       }
@@ -147,7 +290,7 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
 
   const clearFilters = () => {
     setSelectedCategory("")
-    setSelectedBrands([])
+    setInternalSelectedBrands([])
     setMinPrice("")
     setMaxPrice("")
     setSelectedSkinType("")
@@ -157,33 +300,48 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
   }
 
   // Filter products based on activeFilter
-  const getFilteredProducts = () => {
-    if (activeFilter === 'recommended') {
+  const getFilteredProducts = (productsList: Product[]): Product[] => {
+    if (activeFilter === 'recommended' && recommendedProducts.length > 0) {
       // Convert recommended products to Product format
-      return recommendedProducts.map((rec: any) => ({
-        name: rec.name,
-        brand: rec.brand,
-        price: rec.price,
-        category: rec.category,
-        description: rec.reason,
+      const recProducts = recommendedProducts.map((rec: any) => ({
+        name: rec.name || rec.product_name || "Unknown Product",
+        brand: rec.brand || "Unknown Brand",
+        price: rec.price || "$0.00",
+        category: rec.category || rec.product_type || "Unknown",
+        description: rec.reason || rec.description || "",
         rating: rec.rating || 4.0,
-        reviewCount: 0,
-        imageUrl: "",
-        productUrl: rec.url || "",
+        reviewCount: rec.review_count || 0,
+        imageUrl: rec.image_url || rec.imageUrl || "/skincarelogo.jpeg",
+        productUrl: rec.url || rec.product_url || "",
         source: "recommended",
         inStock: true,
-        size: "Standard",
-        ingredients: rec.key_ingredients || [],
-        skinType: rec.skin_types?.join(", ") || "All Skin Types",
-        keyBenefits: [rec.reason]
+        size: rec.size || "Standard",
+        ingredients: rec.key_ingredients || rec.ingredients || [],
+        skinType: Array.isArray(rec.skin_types) ? rec.skin_types.join(", ") : (rec.skin_types || "All Skin Types"),
+        keyBenefits: rec.key_benefits || [rec.reason].filter(Boolean)
       }))
+      
+      // Apply filters to recommended products too
+      let filtered = [...recProducts]
+      if (internalSelectedBrands.length > 0) {
+        filtered = filtered.filter(product => 
+          internalSelectedBrands.some(brand => 
+            product.brand.toLowerCase().includes(brand.toLowerCase())
+          )
+        )
+      }
+      const [minPriceValue, maxPriceValue] = effectivePriceRange
+      filtered = filtered.filter(product => {
+        const priceStr = product.price.toString().replace('$', '').trim()
+        const price = parseFloat(priceStr) || 0
+        return price >= minPriceValue && price <= maxPriceValue
+      })
+      return filtered
     } else {
-      // Show all products
-      return products
+      // Show all products (already filtered by applyFiltersToProducts)
+      return productsList
     }
   }
-
-  const filteredProducts = getFilteredProducts()
 
   const handleProductSelect = (product: Product) => {
     if (onProductSelect) {
@@ -202,9 +360,55 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
       setSearchQuery(initialQuery)
       searchProducts()
     } else {
+      // Always load trending products on mount if no query
       loadTrendingProducts()
     }
   }, [initialQuery])
+
+  // Update filtered products when activeFilter or recommendedProducts change
+  useEffect(() => {
+    if (activeFilter === 'recommended' && recommendedProducts.length > 0) {
+      applyFiltersToProducts()
+    } else if (products.length > 0) {
+      applyFiltersToProducts()
+    }
+  }, [activeFilter, recommendedProducts])
+
+  // Refresh products when filters are applied (via refreshTrigger)
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      console.log('🔄 [PRODUCT SEARCH] Filters applied, refreshing products with:', {
+        selectedBrands: internalSelectedBrands,
+        priceRange: effectivePriceRange,
+        activeFilter
+      })
+      // Sync internal brands with prop brands before refreshing
+      if (selectedBrands.length !== internalSelectedBrands.length || 
+          !selectedBrands.every(b => internalSelectedBrands.includes(b))) {
+        setInternalSelectedBrands(selectedBrands)
+      }
+      // If activeFilter is 'all', reload trending products with filters
+      if (activeFilter === 'all') {
+        loadTrendingProducts()
+      } else {
+        // If 'recommended', just apply filters to existing recommended products
+        applyFiltersToProducts()
+      }
+      if (onFiltersApplied) {
+        onFiltersApplied()
+      }
+    }
+  }, [refreshTrigger, selectedBrands, priceRange])
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const timeoutId = setTimeout(() => {
+        searchProducts()
+      }, 500)
+      return () => clearTimeout(timeoutId)
+    }
+  }, [searchQuery])
 
   return (
     <div className="space-y-6">
@@ -227,41 +431,6 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
             />
             <Button onClick={searchProducts} disabled={loading || !searchQuery.trim()}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadTrendingProducts}
-              disabled={loading}
-            >
-              <TrendingUp className="w-4 h-4 mr-1" />
-              Trending
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchQuery("best skincare 2024")}
-            >
-              <Star className="w-4 h-4 mr-1" />
-              Best of 2024
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSearchQuery("dermatologist recommended")}
-            >
-              <Star className="w-4 h-4 mr-1" />
-              Expert Picks
             </Button>
           </div>
         </CardContent>
@@ -308,11 +477,11 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
                     <label key={brand} className="flex items-center gap-2 text-sm py-1">
                       <input
                         type="checkbox"
-                        checked={selectedBrands.includes(brand)}
+                        checked={internalSelectedBrands.includes(brand)}
                         onChange={(e) => {
                           setPage(1)
-                          if (e.target.checked) setSelectedBrands([...selectedBrands, brand])
-                          else setSelectedBrands(selectedBrands.filter(b => b !== brand))
+                          if (e.target.checked) setInternalSelectedBrands([...internalSelectedBrands, brand])
+                          else setInternalSelectedBrands(internalSelectedBrands.filter(b => b !== brand))
                         }}
                       />
                       {brand}
@@ -426,9 +595,8 @@ export function ProductSearch({ onProductSelect, initialQuery = "", activeFilter
               {filteredProducts.length} products found
             </Badge>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product, index) => (
+            {filteredProducts.map((product: Product, index: number) => (
               <RealProductCard
                 key={`${product.name}-${index}`}
                 product={product}
