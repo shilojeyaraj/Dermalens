@@ -36,6 +36,11 @@ const nextConfig = {
       tls: false,
     };
 
+    // Ensure path aliases work correctly
+    if (config.resolve.alias) {
+      config.resolve.alias['@'] = require('path').resolve(__dirname, '.');
+    }
+
     return config;
   },
 }
