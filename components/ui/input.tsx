@@ -1,9 +1,6 @@
 import * as React from "react"
 
-// Simple cn function without external dependencies
-function cn(...classes: (string | undefined | null | boolean)[]): string {
-  return classes.filter(Boolean).join(' ')
-}
+import { cn } from "../../lib/utils"
 
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {}

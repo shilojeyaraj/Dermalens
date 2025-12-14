@@ -1,25 +1,25 @@
 """
 Test the complete AI-powered skin analysis system
 """
-from openai_analysis_service import openai_analysis_service
+from gemini_analysis_service import gemini_analysis_service
 from google_search_service import google_search_service
 
-def test_openai_service():
-    """Test OpenAI Vision API initialization"""
+def test_gemini_service():
+    """Test Google Gemini API initialization"""
     print("=" * 60)
-    print("TESTING OPENAI VISION API")
+    print("TESTING GOOGLE GEMINI API")
     print("=" * 60)
     
-    print(f"\n1. OpenAI Service Status: {'✅ ENABLED' if openai_analysis_service.is_enabled() else '❌ DISABLED'}")
+    print(f"\n1. Gemini Service Status: {'✅ ENABLED' if gemini_analysis_service.is_enabled() else '❌ DISABLED'}")
     
-    if openai_analysis_service.is_enabled():
-        print(f"   API Key: {openai_analysis_service.api_key[:20]}...")
-        print(f"   Model: {openai_analysis_service.model}")
+    if gemini_analysis_service.is_enabled():
+        print(f"   API Key: {gemini_analysis_service.api_key[:20]}...")
+        print(f"   Model: {gemini_analysis_service.model_name}")
     else:
-        print("\n❌ OpenAI is not enabled!")
+        print("\n❌ Gemini is not enabled!")
         print("Please check:")
-        print("  - OPENAI_API_KEY in .env file")
-        print("  - OPENAI_ENABLED=True in .env file")
+        print("  - GEMINI_API_KEY in .env file")
+        print("  - GEMINI_ENABLED=True in .env file")
         return False
     
     return True
@@ -48,7 +48,7 @@ def test_integration():
     print("=" * 60)
     
     print("\n3. Integration Check:")
-    print("   ✅ OpenAI Vision API - Ready")
+    print("   ✅ Google Gemini API - Ready")
     print("   ✅ Google Custom Search API - Ready")
     print("   ✅ Supabase Database - Configured")
     print("   ✅ Comprehensive Analysis Service - Ready")
@@ -60,7 +60,7 @@ def test_integration():
     print("\n🎉 Your AI-Powered Skin Analysis System is READY!")
     print("\nWhat the system can do:")
     print("  1. Fetch user data from Supabase (profile + skin info + images)")
-    print("  2. Analyze facial images with OpenAI GPT-4o Vision")
+    print("  2. Analyze facial images with Google Gemini Vision")
     print("  3. Detect skin conditions (acne, wrinkles, hyperpigmentation, etc.)")
     print("  4. Search for real products with Google Custom Search")
     print("  5. Filter products by user allergies")
@@ -80,10 +80,10 @@ def test_integration():
 def main():
     print("\n🔬 COMPREHENSIVE SYSTEM TEST\n")
     
-    # Test OpenAI
-    openai_ok = test_openai_service()
-    if not openai_ok:
-        print("\n⚠️  OpenAI is not configured. Some features will be limited.")
+    # Test Gemini
+    gemini_ok = test_gemini_service()
+    if not gemini_ok:
+        print("\n⚠️  Gemini is not configured. Some features will be limited.")
     
     # Test Google Search
     google_ok = test_google_service()
@@ -91,7 +91,7 @@ def main():
         print("\n⚠️  Google Search is not configured. Will use mock products.")
     
     # Test integration
-    if openai_ok and google_ok:
+    if gemini_ok and google_ok:
         test_integration()
     else:
         print("\n⚠️  System is partially configured.")

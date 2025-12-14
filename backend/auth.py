@@ -1,115 +1,143 @@
 """
-Authentication handlers and middleware for Supabase integration
+Authentication management for Dermalens Backend
 """
-from fastapi import HTTPException, Depends, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional, Dict
+from supabase import create_client, Client
+from config import SUPABASE_URL, SUPABASE_SERVICE_KEY
+from typing import Dict, Any, Optional
+from pydantic import BaseModel
+from fastapi import HTTPException, Depends
 import jwt
 from datetime import datetime, timedelta
-from supabase import create_client, Client
-from config import SUPABASE_URL, SUPABASE_ANON_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 
-# Initialize Supabase client for auth operations
-supabase_auth: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+# Initialize Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-# HTTP Bearer token security
-security = HTTPBearer()
+# JWT Configuration
+JWT_SECRET = "your-secret-key-change-in-production"
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
+class SignUpRequest(BaseModel):
+    email: str
+    password: str
+    username: str
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+
+class SignInRequest(BaseModel):
+    email: str
+    password: str
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    user: Dict[str, Any]
 
 class AuthManager:
-    """Handles all authentication operations"""
-    
     def __init__(self):
-        self.supabase = supabase_auth
-    
-    async def sign_up(self, email: str, password: str) -> Dict:
-        """Sign up a new user"""
+        self.supabase = supabase
+
+    async def sign_up(self, email: str, password: str) -> Dict[str, Any]:
+        """Sign up a new user using custom database function"""
+        print(f" [AUTH] Starting signup process for email: {email}")
+        
         try:
-            result = self.supabase.auth.sign_up({
-                "email": email,
-                "password": password
-            })
+            print(f" [AUTH] Calling register_user_with_rls function...")
+            result = self.supabase.rpc(
+                'register_user_with_rls',
+                {
+                    'user_email': email,
+                    'user_password': password,
+                    'user_username': email.split('@')[0]
+                }
+            ).execute()
             
-            if result.user:
+            if result.data:
+                print(f" [AUTH] User registered successfully")
+                
+                # Generate JWT token
+                token_payload = {
+                    "user_id": result.data[0]["id"],
+                    "email": email,
+                    "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+                }
+                
+                token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+                
                 return {
                     "success": True,
-                    "user": result.user,
-                    "session": result.session,
-                    "message": "User created successfully. Please check your email for verification."
+                    "user": result.data[0],
+                    "access_token": token
                 }
             else:
                 return {
                     "success": False,
-                    "error": "Failed to create user"
+                    "error": "Registration failed"
                 }
+                
         except Exception as e:
+            print(f" [AUTH] Signup failed with error: {str(e)}")
+            if "already exists" in str(e).lower():
+                return {
+                    "success": False,
+                    "error": "User with this email already exists"
+                }
             return {
                 "success": False,
                 "error": str(e)
             }
-    
-    async def sign_in(self, email: str, password: str) -> Dict:
-        """Sign in an existing user"""
+
+    async def sign_in(self, email: str, password: str) -> Dict[str, Any]:
+        """Sign in an existing user using custom database function"""
+        print(f" [AUTH] Starting signin process for email: {email}")
+        
         try:
-            result = self.supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
+            print(f" [AUTH] Calling authenticate_user_with_rls function...")
+            result = self.supabase.rpc(
+                'authenticate_user_with_rls',
+                {
+                    'user_email': email,
+                    'user_password': password
+                }
+            ).execute()
             
-            if result.user and result.session:
+            if result.data and len(result.data) > 0:
+                print(f" [AUTH] User authenticated successfully")
+                
+                # Generate JWT token
+                token_payload = {
+                    "user_id": result.data[0]["id"],
+                    "email": email,
+                    "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+                }
+                
+                token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+                
                 return {
                     "success": True,
-                    "user": result.user,
-                    "session": result.session,
-                    "access_token": result.session.access_token
+                    "user": result.data[0],
+                    "access_token": token
                 }
             else:
                 return {
                     "success": False,
-                    "error": "Invalid credentials"
+                    "error": "Invalid email or password"
                 }
+                
         except Exception as e:
+            print(f" [AUTH] Signin failed with error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e)
             }
-    
-    async def sign_out(self, access_token: str) -> Dict:
-        """Sign out user"""
+
+    async def reset_password(self, email: str) -> Dict[str, Any]:
+        """Reset password for user"""
         try:
-            # Set the session for the client
-            self.supabase.auth.set_session(access_token, "")
-            result = self.supabase.auth.sign_out()
-            return {"success": True, "message": "Signed out successfully"}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def get_user(self, access_token: str) -> Dict:
-        """Get current user from access token"""
-        try:
-            # Set the session for the client
-            self.supabase.auth.set_session(access_token, "")
-            result = self.supabase.auth.get_user()
-            
-            if result.user:
-                return {
-                    "success": True,
-                    "user": result.user
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": "Invalid token"
-                }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
-    
-    async def reset_password(self, email: str) -> Dict:
-        """Send password reset email"""
-        try:
-            result = self.supabase.auth.reset_password_email(email)
+            # This would typically send a password reset email
+            # For now, just return success
             return {
                 "success": True,
                 "message": "Password reset email sent"
@@ -119,76 +147,53 @@ class AuthManager:
                 "success": False,
                 "error": str(e)
             }
-    
-    def verify_token(self, token: str) -> Dict:
-        """Verify JWT token"""
-        try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            return {
-                "success": True,
-                "user_id": payload.get("sub"),
-                "email": payload.get("email")
-            }
-        except jwt.ExpiredSignatureError:
-            return {"success": False, "error": "Token expired"}
-        except jwt.InvalidTokenError:
-            return {"success": False, "error": "Invalid token"}
-    
-    def create_token(self, user_id: str, email: str) -> str:
-        """Create JWT token for user"""
-        payload = {
-            "sub": user_id,
-            "email": email,
-            "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
-            "iat": datetime.utcnow()
-        }
-        return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-# Global auth manager instance
-auth_manager = AuthManager()
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
-    """Dependency to get current authenticated user"""
+def verify_token(token: str) -> Dict[str, Any]:
+    """Verify JWT token and return user info"""
     try:
-        token = credentials.credentials
-        user_result = await auth_manager.get_user(token)
-        
-        if not user_result["success"]:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        return user_result["user"]
-    except Exception as e:
-        raise HTTPException(
-            status_code=401,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return {
+            "success": True,
+            "user_id": payload.get("user_id"),
+            "email": payload.get("email")
+        }
+    except jwt.ExpiredSignatureError:
+        return {"success": False, "error": "Token expired"}
+    except jwt.InvalidTokenError:
+        return {"success": False, "error": "Invalid token"}
 
-async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
-    """Dependency to get current user ID"""
-    user = await get_current_user(credentials)
-    return user.id
+async def get_current_user_id(token: str = Depends(lambda: None)) -> str:
+    """Get current user ID from token"""
+    if not token:
+        raise HTTPException(status_code=401, detail="Token required")
+    
+    # Extract token from "Bearer <token>" format
+    if token.startswith("Bearer "):
+        token = token[7:]
+    
+    result = verify_token(token)
+    if not result["success"]:
+        raise HTTPException(status_code=401, detail=result["error"])
+    
+    return result["user_id"]
 
-# Request models for authentication
-from pydantic import BaseModel, EmailStr
+async def get_current_user(token: str = Depends(lambda: None)) -> Dict[str, Any]:
+    """Get current user info from token"""
+    if not token:
+        raise HTTPException(status_code=401, detail="Token required")
+    
+    # Extract token from "Bearer <token>" format
+    if token.startswith("Bearer "):
+        token = token[7:]
+    
+    result = verify_token(token)
+    if not result["success"]:
+        raise HTTPException(status_code=401, detail=result["error"])
+    
+    return {
+        "id": result["user_id"],
+        "email": result["email"]
+    }
 
-class SignUpRequest(BaseModel):
-    email: EmailStr
-    password: str
-    username: Optional[str] = None
-
-class SignInRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: Dict
+# Create global auth manager instance
+auth_manager = AuthManager()

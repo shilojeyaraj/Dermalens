@@ -1,170 +1,74 @@
 """
-Database operations and models for Supabase integration
+Database management for Dermalens Backend
 """
-from supabase import create_client, Client
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
+from supabase import Client, create_client
+
 from config import (
-    SUPABASE_URL, 
-    SUPABASE_SERVICE_KEY, 
-    PROFILES_TABLE, 
-    USER_IMAGES_TABLE, 
-    USER_SKIN_PROFILES_TABLE
+    PROFILES_TABLE,
+    SUPABASE_SERVICE_KEY,
+    SUPABASE_URL,
+    USER_IMAGES_TABLE,
+    USER_SKIN_PROFILES_TABLE,
 )
 
-class DatabaseManager:
-    """Manages all database operations with Supabase"""
-    
-    def __init__(self):
-        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    
-    # Profile Operations
-    async def create_profile(self, user_id: str, email: str, username: str = None, profile_picture: str = None) -> Dict:
-        """Create a new user profile"""
-        try:
-            profile_data = {
-                "id": user_id,
-                "email": email,
-                "username": username,
-                "profile_picture": profile_picture,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            result = self.supabase.table(PROFILES_TABLE).insert(profile_data).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def get_profile(self, user_id: str) -> Dict:
-        """Get user profile by ID"""
-        try:
-            result = self.supabase.table(PROFILES_TABLE).select("*").eq("id", user_id).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def update_profile(self, user_id: str, updates: Dict) -> Dict:
-        """Update user profile"""
-        try:
-            updates["updated_at"] = datetime.now().isoformat()
-            result = self.supabase.table(PROFILES_TABLE).update(updates).eq("id", user_id).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    # User Skin Profile Operations
-    async def create_skin_profile(self, user_id: str, skin_data: Dict) -> Dict:
-        """Create user skin profile"""
-        try:
-            skin_profile_data = {
-                "user_id": user_id,
-                "skin_type": skin_data.get("skin_type"),
-                "skin_tone": skin_data.get("skin_tone"),
-                "acne_severity": skin_data.get("acne_severity"),
-                "pore_size": skin_data.get("pore_size"),
-                "sensitivity_level": skin_data.get("sensitivity_level"),
-                "primary_concerns": skin_data.get("primary_concerns", []),
-                "pre_existing_conditions": skin_data.get("pre_existing_conditions", []),
-                "allergies": skin_data.get("allergies", []),
-                "diet_type": skin_data.get("diet_type"),
-                "water_intake": skin_data.get("water_intake"),
-                "sleep_hours": skin_data.get("sleep_hours"),
-                "sun_exposure": skin_data.get("sun_exposure"),
-                "routine_frequency": skin_data.get("routine_frequency"),
-                "routine_type": skin_data.get("routine_type"),
-                "skin_goals": skin_data.get("skin_goals", []),
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
-            }
-            
-            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).insert(skin_profile_data).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def get_skin_profile(self, user_id: str) -> Dict:
-        """Get user skin profile by user ID"""
-        try:
-            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).select("*").eq("user_id", user_id).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def update_skin_profile(self, user_id: str, updates: Dict) -> Dict:
-        """Update user skin profile"""
-        try:
-            updates["updated_at"] = datetime.now().isoformat()
-            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).update(updates).eq("user_id", user_id).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    # User Images Operations
-    async def save_user_image(self, user_id: str, storage_path: str, bucket: str = "user-images") -> Dict:
-        """Save user image metadata to database"""
-        try:
-            image_data = {
-                "user_id": user_id,
-                "storage_path": storage_path,
-                "bucket": bucket,
-                "created_at": datetime.now().isoformat()
-            }
-            
-            result = self.supabase.table(USER_IMAGES_TABLE).insert(image_data).execute()
-            return {"success": True, "data": result.data[0] if result.data else None}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def get_user_images(self, user_id: str) -> Dict:
-        """Get all images for a user"""
-        try:
-            result = self.supabase.table(USER_IMAGES_TABLE).select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
-            return {"success": True, "data": result.data if result.data else []}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def delete_user_image(self, image_id: str) -> Dict:
-        """Delete user image"""
-        try:
-            result = self.supabase.table(USER_IMAGES_TABLE).delete().eq("id", image_id).execute()
-            return {"success": True, "data": result.data}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
 
-# Create global database manager instance
-db_manager = DatabaseManager()
+# Initialize Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-# Pydantic models for request/response validation
-from pydantic import BaseModel, Field
-from typing import List, Optional
+
+def _clean_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove keys where the value is None."""
+    return {key: value for key, value in payload.items() if value is not None}
+
+
+def _current_timestamp() -> str:
+    """Return an ISO formatted UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
+
 
 class UserProfileCreate(BaseModel):
+    user_id: str
     email: str
-    username: Optional[str] = None
-    profile_picture: Optional[str] = None
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    age: Optional[int] = None
+
 
 class UserProfileUpdate(BaseModel):
     username: Optional[str] = None
-    profile_picture: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    age: Optional[int] = None
+
 
 class SkinProfileCreate(BaseModel):
+    user_id: Optional[str] = None
     skin_type: Optional[str] = None
     skin_tone: Optional[str] = None
     acne_severity: Optional[str] = None
     pore_size: Optional[str] = None
     sensitivity_level: Optional[str] = None
-    primary_concerns: List[str] = []
-    pre_existing_conditions: List[str] = []
-    allergies: List[str] = []
+    primary_concerns: List[str] = Field(default_factory=list)
+    pre_existing_conditions: List[str] = Field(default_factory=list)
+    allergies: List[str] = Field(default_factory=list)
+    preferred_brands: List[str] = Field(default_factory=list)
+    medical_conditions: List[str] = Field(default_factory=list)
     diet_type: Optional[str] = None
     water_intake: Optional[str] = None
     sleep_hours: Optional[str] = None
     sun_exposure: Optional[str] = None
     routine_frequency: Optional[str] = None
     routine_type: Optional[str] = None
-    skin_goals: List[str] = []
+    skin_goals: List[str] = Field(default_factory=list)
+    additional_info: Optional[str] = None
+
 
 class SkinProfileUpdate(BaseModel):
     skin_type: Optional[str] = None
@@ -175,6 +79,8 @@ class SkinProfileUpdate(BaseModel):
     primary_concerns: Optional[List[str]] = None
     pre_existing_conditions: Optional[List[str]] = None
     allergies: Optional[List[str]] = None
+    preferred_brands: Optional[List[str]] = None
+    medical_conditions: Optional[List[str]] = None
     diet_type: Optional[str] = None
     water_intake: Optional[str] = None
     sleep_hours: Optional[str] = None
@@ -182,7 +88,221 @@ class SkinProfileUpdate(BaseModel):
     routine_frequency: Optional[str] = None
     routine_type: Optional[str] = None
     skin_goals: Optional[List[str]] = None
+    additional_info: Optional[str] = None
+
 
 class UserImageCreate(BaseModel):
-    storage_path: str
-    bucket: str = "user-images"
+    user_id: str
+    image_url: str
+    image_type: str
+    analysis_results: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+
+class DatabaseManager:
+    def __init__(self):
+        self.supabase = supabase
+        self.profiles_table = PROFILES_TABLE
+        self.skin_profiles_table = USER_SKIN_PROFILES_TABLE
+        self.images_table = USER_IMAGES_TABLE
+
+    def _extract_single(self, result: Any) -> Optional[Dict[str, Any]]:
+        """Return the first row from a Supabase response, if present."""
+        data = getattr(result, "data", None)
+        if isinstance(data, list) and data:
+            return data[0]
+        if isinstance(data, dict):
+            return data
+        return None
+
+    def _fetch_profile(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a profile row by id or user_id."""
+        lookup = (
+            self.supabase
+            .table(self.profiles_table)
+            .select("*")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        profile = self._extract_single(lookup)
+        if profile:
+            return profile
+
+        lookup = (
+            self.supabase
+            .table(self.profiles_table)
+            .select("*")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return self._extract_single(lookup)
+
+    async def create_profile(
+        self,
+        user_id: str,
+        email: str,
+        username: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        age: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Create or upsert a user profile."""
+        try:
+            payload = _clean_payload(
+                {
+                    "id": user_id,
+                    "user_id": user_id,
+                    "email": email,
+                    "username": username,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "phone": phone,
+                    "age": age,
+                    "updated_at": _current_timestamp(),
+                }
+            )
+
+            response = (
+                self.supabase
+                .table(self.profiles_table)
+                .upsert(payload, on_conflict="id")
+                .execute()
+            )
+
+            profile = self._extract_single(response) or self._fetch_profile(user_id)
+            return {"success": True, "data": profile}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def get_profile(self, user_id: str) -> Dict[str, Any]:
+        """Get user profile by user id."""
+        try:
+            profile = self._fetch_profile(user_id)
+            return {"success": True, "data": profile}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def update_profile(self, user_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update user profile."""
+        try:
+            updates = _clean_payload(update_data)
+            if not updates:
+                current = await self.get_profile(user_id)
+                return {"success": True, "data": current.get("data")}
+
+            updates["updated_at"] = _current_timestamp()
+            response = (
+                self.supabase
+                .table(self.profiles_table)
+                .update(updates)
+                .eq("id", user_id)
+                .execute()
+            )
+
+            profile = self._extract_single(response) or self._fetch_profile(user_id)
+            return {"success": True, "data": profile}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def create_skin_profile(self, user_id: str, skin_profile_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create or upsert a skin profile."""
+        try:
+            payload_data = dict(skin_profile_data or {})
+            payload_data.pop("user_id", None)
+            payload = SkinProfileCreate(user_id=user_id, **payload_data)
+            data = payload.dict(exclude_none=True)
+            data["updated_at"] = _current_timestamp()
+
+            response = (
+                self.supabase
+                .table(self.skin_profiles_table)
+                .upsert(data, on_conflict="user_id")
+                .execute()
+            )
+
+            record = self._extract_single(response)
+            if not record:
+                record = (await self.get_skin_profile(user_id))["data"]
+            return {"success": True, "data": record}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def get_skin_profile(self, user_id: str) -> Dict[str, Any]:
+        """Get skin profile by user id."""
+        try:
+            response = (
+                self.supabase
+                .table(self.skin_profiles_table)
+                .select("*")
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            return {"success": True, "data": self._extract_single(response)}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def update_skin_profile(self, user_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update user skin profile."""
+        try:
+            update_payload = dict(update_data or {})
+            update_payload.pop("user_id", None)
+            updates = SkinProfileUpdate(**update_payload).dict(exclude_none=True)
+            if not updates:
+                return await self.get_skin_profile(user_id)
+
+            updates["updated_at"] = _current_timestamp()
+            response = (
+                self.supabase
+                .table(self.skin_profiles_table)
+                .update(updates)
+                .eq("user_id", user_id)
+                .execute()
+            )
+
+            record = self._extract_single(response)
+            if not record:
+                record = (await self.get_skin_profile(user_id))["data"]
+            return {"success": True, "data": record}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def get_user_profile(self, user_id: str) -> Dict[str, Any]:
+        """Alias for get_profile."""
+        return await self.get_profile(user_id)
+
+    async def get_user_images(self, user_id: str) -> Dict[str, Any]:
+        """Get user images."""
+        try:
+            response = (
+                self.supabase
+                .table(self.images_table)
+                .select("*")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            data = getattr(response, "data", []) or []
+            return {"success": True, "data": data}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    async def delete_user_image(self, image_id: str) -> Dict[str, Any]:
+        """Delete a user image by id."""
+        try:
+            response = (
+                self.supabase
+                .table(self.images_table)
+                .delete()
+                .eq("id", image_id)
+                .execute()
+            )
+            return {"success": True, "data": getattr(response, "data", None)}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+
+# Create global database manager instance
+db_manager = DatabaseManager()
+

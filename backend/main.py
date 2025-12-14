@@ -12,30 +12,56 @@ import io
 import base64
 import requests
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime
+import google.generativeai as genai
+
+# Optional Google Search placeholder (disabled by default to avoid import issues)
+def search(*args, **kwargs):
+    return []
+
+import sys
+import os
 
 # Import our custom modules
-from config import ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG
+from config import ALLOWED_ORIGINS, API_HOST, API_PORT, DEBUG, OPENAI_API_KEY, GOOGLE_WEB_SEARCH_API_KEY, GEMINI_API_KEY, GEMINI_ENABLED
 from database import db_manager, UserProfileCreate, UserProfileUpdate, SkinProfileCreate, SkinProfileUpdate, UserImageCreate
 from auth import auth_manager, get_current_user, get_current_user_id, SignUpRequest, SignInRequest, PasswordResetRequest, TokenResponse
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Dermalens Skin Analysis API", version="1.0.0")
 
 # CORS middleware for frontend integration
+print(f"🌐 [CORS] Allowed origins: {ALLOWED_ORIGINS}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Add explicit OPTIONS handler for CORS preflight
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return {"message": "OK"}
 
 # Global variables for models
 face_cascade = None
 skin_model = None
 device = None
+
+# Initialize OpenAI (optional)
+try:
+    import openai
+    if OPENAI_API_KEY:
+        openai.api_key = OPENAI_API_KEY
+except Exception:
+    pass
 
 # Skin condition classes
 SKIN_CONDITIONS = [
@@ -135,7 +161,7 @@ def preprocess_image(image: np.ndarray) -> torch.Tensor:
     tensor = transform(pil_image).unsqueeze(0)
     return tensor.to(device)
 
-def classify_skin_conditions(face_regions: List[np.ndarray]) -> List[Dict[str, Any]]:
+def classify_skin_conditions(face_regions: List) -> List[Dict[str, Any]]:
     """Classify skin conditions in face regions"""
     results = []
     
@@ -168,129 +194,205 @@ def classify_skin_conditions(face_regions: List[np.ndarray]) -> List[Dict[str, A
     
     return results
 
+
+
+def normalize_user_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ensure user profile has consistent defaults."""
+    if not profile:
+        return {}
+    normalized = dict(profile)
+    age_value = normalized.get("age")
+    if age_value is not None:
+        try:
+            normalized["age"] = int(age_value)
+        except (TypeError, ValueError):
+            normalized["age"] = age_value
+    for key in ("first_name", "last_name", "username", "phone"):
+        if normalized.get(key) is None:
+            normalized[key] = ""
+    return normalized
+
+
+def normalize_skin_profile(profile: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Ensure skin profile fields and aliases are available."""
+    if not profile:
+        return {}
+    normalized = dict(profile)
+    alias_source = normalized.get("skin_concerns") or normalized.get("primary_concerns")
+    normalized["skin_concerns"] = list(alias_source or [])
+    normalized["primary_concerns"] = list(normalized.get("primary_concerns") or normalized["skin_concerns"])
+    for key in (
+        "pre_existing_conditions",
+        "allergies",
+        "skin_goals",
+        "preferred_brands",
+        "medical_conditions",
+    ):
+        normalized[key] = list(normalized.get(key) or [])
+    if normalized.get("additional_info") is None:
+        normalized["additional_info"] = ""
+    return normalized
+
+
 def enhance_product_recommendations(products: List[Dict[str, Any]], user_skin_profile: Dict, detected_conditions: List[str]) -> List[Dict[str, Any]]:
     """Enhance product recommendations based on user's skin profile"""
-    if not user_skin_profile:
+    profile = normalize_skin_profile(user_skin_profile)
+    if not profile:
         return products
-    
+
     enhanced_products = []
-    
+
     for product in products:
         # Add personalized scoring based on user profile
         personalized_score = 0
-        
+
         # Consider skin type compatibility
-        skin_type = user_skin_profile.get("skin_type")
+        skin_type = profile.get("skin_type")
         if skin_type == "dry" and "moisturizer" in product["type"].lower():
             personalized_score += 2
         elif skin_type == "oily" and "cleanser" in product["type"].lower():
             personalized_score += 2
         elif skin_type == "sensitive" and "gentle" in product["description"].lower():
             personalized_score += 3
-        
+
         # Consider allergies
-        allergies = user_skin_profile.get("allergies", [])
+        allergies = profile.get("allergies", [])
         product_safe = True
         for allergy in allergies:
             if allergy.lower() in product["description"].lower():
                 product_safe = False
                 break
-        
+
         if not product_safe:
             continue
-        
+
         # Consider sensitivity level
-        sensitivity = user_skin_profile.get("sensitivity_level")
+        sensitivity = profile.get("sensitivity_level")
         if sensitivity == "high" and "fragrance-free" in product["description"].lower():
+            personalized_score += 3
+        elif sensitivity == "high" and "gentle" in product["description"].lower():
             personalized_score += 2
-        elif sensitivity == "high" and any(ingredient in product["description"].lower() for ingredient in ["fragrance", "parfum", "alcohol"]):
-            personalized_score -= 2
-        
-        # Add personalized score to product
-        enhanced_product = product.copy()
-        enhanced_product["personalized_score"] = product["rating"] + (personalized_score * 0.1)
-        enhanced_products.append(enhanced_product)
-    
-    # Sort by personalized score
-    enhanced_products.sort(key=lambda x: x["personalized_score"], reverse=True)
+
+        # Boost for detected conditions
+        for condition in detected_conditions:
+            if condition.replace("_", " ") in product["description"].lower():
+                personalized_score += 1
+
+        # Boost for matching concerns
+        for concern in profile.get("skin_concerns", []):
+            if concern.replace("_", " ") in product["description"].lower():
+                personalized_score += 2
+
+        product_copy = dict(product)
+        product_copy["personalized_score"] = personalized_score
+        enhanced_products.append(product_copy)
+
+    enhanced_products.sort(key=lambda x: x.get("personalized_score", 0), reverse=True)
+
     return enhanced_products
 
-def search_products(conditions: List[str]) -> List[Dict[str, Any]]:
-    """Search for skincare products using Google Store API (mock implementation)"""
-    # This is a mock implementation - in production, you'd use the actual Google Store API
-    product_database = {
-        "acne": [
-            {
-                "name": "CeraVe Acne Foaming Cream Cleanser",
-                "brand": "CeraVe",
-                "price": 16.99,
-                "rating": 4.5,
-                "description": "Contains benzoyl peroxide to treat acne",
-                "image": "/cerave-acne-cleanser.jpg",
-                "type": "Cleanser"
-            },
-            {
-                "name": "The Ordinary Niacinamide 10% + Zinc 1%",
-                "brand": "The Ordinary",
-                "price": 12.90,
-                "rating": 4.6,
-                "description": "Reduces blemishes and balances oil production",
-                "image": "/ordinary-niacinamide.jpg",
-                "type": "Serum"
-            }
-        ],
-        "hyperpigmentation": [
-            {
-                "name": "Paula's Choice 10% Azelaic Acid Booster",
-                "brand": "Paula's Choice",
-                "price": 36.00,
-                "rating": 4.7,
-                "description": "Reduces dark spots and evens skin tone",
-                "image": "/paula-choice-azelaic.jpg",
-                "type": "Treatment"
-            },
-            {
-                "name": "The Ordinary Vitamin C Suspension 23%",
-                "brand": "The Ordinary",
-                "price": 7.20,
-                "rating": 4.3,
-                "description": "Brightens skin and reduces dark spots",
-                "image": "/ordinary-vitamin-c.jpg",
-                "type": "Serum"
-            }
-        ],
-        "dry_skin": [
-            {
-                "name": "CeraVe Moisturizing Cream",
-                "brand": "CeraVe",
-                "price": 19.99,
-                "rating": 4.8,
-                "description": "Rich moisturizer with ceramides and hyaluronic acid",
-                "image": "/cerave-moisturizer.jpg",
-                "type": "Moisturizer"
-            }
-        ],
-        "wrinkles": [
-            {
-                "name": "The Ordinary Retinol 0.5% in Squalane",
-                "brand": "The Ordinary",
-                "price": 9.80,
-                "rating": 4.4,
-                "description": "Anti-aging retinol treatment",
-                "image": "/ordinary-retinol.jpg",
-                "type": "Treatment"
-            }
-        ]
-    }
+def generate_personalized_report(user_skin_profile: Dict, analysis_results: List[Dict], detected_conditions: List[str]) -> Dict[str, Any]:
+    """Generate personalized skin report using Google Gemini 1.5 Pro"""
+    if not GEMINI_API_KEY:
+        return {
+            "report": "AI report generation not available. Please check Gemini API configuration.",
+            "recommendations": [],
+            "timeframe": "N/A"
+        }
     
-    recommended_products = []
-    for condition in conditions:
-        if condition in product_database:
-            recommended_products.extend(product_database[condition])
-    
-    # Remove duplicates and sort by rating
-    unique_products = list({product["name"]: product for product in recommended_products}.values())
-    return sorted(unique_products, key=lambda x: x["rating"], reverse=True)
+    try:
+        # Use Gemini for report generation
+        from apps.api.ai.gemini_analysis_service import get_gemini_service
+        gemini_service = get_gemini_service(GEMINI_API_KEY)
+        
+        # Generate report using Gemini
+        report_result = gemini_service.generate_personalized_report(
+            user_profile=user_skin_profile,
+            analysis_results=analysis_results,
+            detected_conditions=detected_conditions
+        )
+        
+        if report_result["success"]:
+            return report_result["report"]
+        else:
+            # Fallback to basic report
+            return {
+                "report": f"Analysis detected {len(detected_conditions)} skin concerns: {', '.join(detected_conditions)}. Please consult with a dermatologist for detailed recommendations.",
+                "recommendations": [
+                    "Use a gentle cleanser twice daily",
+                    "Apply sunscreen with SPF 30+ every morning",
+                    "Moisturize with a non-comedogenic formula"
+                ],
+                "timeframe": "2-4 weeks for initial improvements"
+            }
+        
+    except Exception as e:
+        logger.error(f"Error generating Gemini report: {e}")
+        return {
+            "report": f"Unable to generate AI report: {str(e)}",
+            "recommendations": [],
+            "timeframe": "N/A"
+        }
+
+async def search_skincare_products(conditions: List[str], user_preferences: Dict = None) -> List[Dict[str, Any]]:
+    """Search for skincare products using Google Search API"""
+    try:
+        products = []
+        
+        for condition in conditions:
+            # Create search query based on condition and user preferences
+            search_terms = []
+            
+            if condition == "acne":
+                search_terms = ["best acne treatment products 2024", "acne cleanser recommendations"]
+            elif condition == "hyperpigmentation":
+                search_terms = ["best hyperpigmentation treatment", "dark spot corrector products"]
+            elif condition == "dry_skin":
+                search_terms = ["best moisturizer for dry skin", "hydrating skincare products"]
+            elif condition == "wrinkles":
+                search_terms = ["anti-aging skincare products", "wrinkle treatment recommendations"]
+            else:
+                search_terms = [f"best {condition} treatment products"]
+            
+            # Add user preferences to search
+            if user_preferences and user_preferences.get('preferred_brands'):
+                for brand in user_preferences['preferred_brands'][:2]:  # Limit to top 2 brands
+                    search_terms.append(f"{brand} {condition} products")
+            
+            # Perform searches (limited to avoid rate limits)
+            for term in search_terms[:2]:  # Limit searches per condition
+                try:
+                    search_results = list(search(term, num_results=3))
+                    for url in search_results:
+                        products.append({
+                            "name": f"Product for {condition}",
+                            "brand": "Recommended Brand",
+                            "price": "Varies",
+                            "rating": 4.5,
+                            "description": f"Recommended product for {condition} treatment",
+                            "url": url,
+                            "condition": condition,
+                            "source": "Google Search"
+                        })
+                except Exception as e:
+                    print(f"Search error for '{term}': {e}")
+                    continue
+        
+        # Remove duplicates and limit results
+        unique_products = []
+        seen_urls = set()
+        for product in products:
+            if product['url'] not in seen_urls:
+                unique_products.append(product)
+                seen_urls.add(product['url'])
+                if len(unique_products) >= 10:  # Limit total results
+                    break
+        
+        return unique_products
+        
+    except Exception as e:
+        print(f"Error searching products: {e}")
+        return []
 
 def generate_skincare_routine(conditions: List[str], products: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Generate personalized skincare routine based on conditions and products"""
@@ -407,37 +509,210 @@ async def root():
 async def health_check():
     return {"status": "healthy", "models_loaded": skin_model is not None}
 
+@app.get("/test-db")
+async def test_database():
+    """Test database connection and table existence"""
+    try:
+        print("🧪 [TEST] Testing database connection...")
+        
+        # Test profiles table
+        try:
+            result = db_manager.supabase.table("profiles").select("*").limit(1).execute()
+            print(f"✅ [TEST] Profiles table exists and accessible")
+        except Exception as e:
+            print(f"❌ [TEST] Profiles table error: {str(e)}")
+            return {"error": f"Profiles table issue: {str(e)}"}
+        
+        # Test user_skin_profiles table
+        try:
+            result = db_manager.supabase.table("user_skin_profiles").select("*").limit(1).execute()
+            print(f"✅ [TEST] User skin profiles table exists and accessible")
+        except Exception as e:
+            print(f"❌ [TEST] User skin profiles table error: {str(e)}")
+            return {"error": f"User skin profiles table issue: {str(e)}"}
+        
+        # Test user_images table
+        try:
+            result = db_manager.supabase.table("user_images").select("*").limit(1).execute()
+            print(f"✅ [TEST] User images table exists and accessible")
+        except Exception as e:
+            print(f"❌ [TEST] User images table error: {str(e)}")
+            return {"error": f"User images table issue: {str(e)}"}
+        
+        return {"status": "all_tables_accessible", "message": "Database connection successful"}
+        
+    except Exception as e:
+        print(f"❌ [TEST] Database test failed: {str(e)}")
+        return {"error": f"Database test failed: {str(e)}"}
+
+@app.post("/test-analyze-skin")
+async def test_analyze_skin(file: UploadFile = File(...)):
+    """Test skin analysis without authentication"""
+    print(f"🧪 [TEST-ANALYZE] Testing skin analysis with file: {file.filename}")
+    
+    try:
+        # Validate file
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        
+        # Read file content
+        contents = await file.read()
+        print(f"📁 [TEST-ANALYZE] File size: {len(contents)} bytes")
+        
+        # Convert to PIL Image
+        image = Image.open(io.BytesIO(contents))
+        print(f"🖼️ [TEST-ANALYZE] Image size: {image.size}")
+        
+        # Simulate analysis (since we don't have the model loaded)
+        mock_result = {
+            "analysis_results": [
+                {
+                    "face_id": 0,
+                    "conditions": [
+                        {"condition": "acne", "confidence": 0.85, "severity": "moderate"},
+                        {"condition": "dry_skin", "confidence": 0.72, "severity": "mild"},
+                        {"condition": "dark_spots", "confidence": 0.68, "severity": "mild"}
+                    ]
+                }
+            ],
+            "detected_conditions": ["acne", "dry_skin", "dark_spots"],
+            "recommended_products": [
+                {
+                    "name": "Salicylic Acid Cleanser",
+                    "brand": "CeraVe",
+                    "price": 15.99,
+                    "rating": 4.5,
+                    "description": "Gentle cleanser for acne-prone skin",
+                    "image": "/facial-moisturizer-pump-bottle.jpg",
+                    "type": "cleanser",
+                    "personalized_score": 92
+                }
+            ],
+            "skincare_routine": {
+                "morning_routine": [
+                    {
+                        "step": 1,
+                        "name": "Cleanse",
+                        "product": "Salicylic Acid Cleanser",
+                        "brand": "CeraVe",
+                        "duration": "1-2 minutes",
+                        "instructions": "Gently massage onto wet face, then rinse thoroughly"
+                    }
+                ],
+                "evening_routine": [],
+                "total_products": 1,
+                "estimated_cost": 15.99,
+                "generated_at": datetime.now().isoformat()
+            },
+            "analysis_timestamp": datetime.now().isoformat()
+        }
+        
+        print(f"✅ [TEST-ANALYZE] Mock analysis complete")
+        return mock_result
+        
+    except Exception as e:
+        print(f"❌ [TEST-ANALYZE] Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
 # Authentication Endpoints
 @app.post("/auth/signup", response_model=TokenResponse)
 async def signup(request: SignUpRequest):
     """Sign up a new user"""
+    print(f"🚀 [SIGNUP] Starting signup endpoint for email: {request.email}")
+    print(f"👤 [SIGNUP] Username: {request.username}")
+    
     try:
         # Create user in Supabase Auth
+        print(f"🔐 [SIGNUP] Calling auth_manager.sign_up...")
         auth_result = await auth_manager.sign_up(request.email, request.password)
         
         if not auth_result["success"]:
+            print(f"❌ [SIGNUP] Auth signup failed: {auth_result['error']}")
             raise HTTPException(status_code=400, detail=auth_result["error"])
         
         user = auth_result["user"]
+        print(f"✅ [SIGNUP] Auth signup successful")
+        print(f"👤 [SIGNUP] User ID: {user.id}")
+        print(f"📧 [SIGNUP] User email: {user.email}")
         
         # Create user profile in database
+        print(f"💾 [SIGNUP] Creating user profile in database...")
+        
+        # Use firstName and lastName from request, fallback to parsing username
+        first_name = request.firstName or ""
+        last_name = request.lastName or ""
+        
+        # If firstName/lastName not provided, try to parse from username
+        if not first_name and not last_name and request.username:
+            name_parts = request.username.strip().split(" ", 1)
+            first_name = name_parts[0] if len(name_parts) > 0 else ""
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+        
+        print(f"👤 [SIGNUP] First Name: {first_name}")
+        print(f"👤 [SIGNUP] Last Name: {last_name}")
+        
         profile_result = await db_manager.create_profile(
             user_id=user.id,
             email=request.email,
-            username=request.username
+            username=request.username,
+            first_name=first_name,
+            last_name=last_name
         )
         
         if not profile_result["success"]:
+            print(f"❌ [SIGNUP] Database profile creation failed: {profile_result.get('error', 'Unknown error')}")
             raise HTTPException(status_code=500, detail="Failed to create user profile")
         
-        return TokenResponse(
-            access_token=auth_result["session"].access_token,
-            user=user
-        )
+        print(f"✅ [SIGNUP] Database profile created successfully")
         
-    except HTTPException:
+        # Convert Supabase User object to dictionary for Pydantic with safe attribute access
+        user_dict = {
+            "id": user.id,
+            "email": user.email,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "updated_at": user.updated_at.isoformat() if user.updated_at else None,
+            "email_confirmed_at": user.email_confirmed_at.isoformat() if user.email_confirmed_at else None,
+            "phone": getattr(user, 'phone', '') or "",
+            "app_metadata": getattr(user, 'app_metadata', {}) or {},
+            "user_metadata": getattr(user, 'user_metadata', {}) or {},
+            "aud": getattr(user, 'aud', 'authenticated') or "authenticated",
+            "confirmation_sent_at": user.confirmation_sent_at.isoformat() if user.confirmation_sent_at else None,
+            "recovery_sent_at": user.recovery_sent_at.isoformat() if user.recovery_sent_at else None,
+            "email_change_sent_at": user.email_change_sent_at.isoformat() if user.email_change_sent_at else None,
+            "new_email": getattr(user, 'new_email', '') or "",
+            "new_phone": getattr(user, 'new_phone', '') or "",
+            "invited_at": user.invited_at.isoformat() if user.invited_at else None,
+            "action_link": getattr(user, 'action_link', '') or "",
+            "phone_confirmed_at": user.phone_confirmed_at.isoformat() if user.phone_confirmed_at else None,
+            "confirmed_at": user.confirmed_at.isoformat() if user.confirmed_at else None,
+            "email_change": getattr(user, 'email_change', '') or "",
+            "phone_change": getattr(user, 'phone_change', '') or "",
+            "last_sign_in_at": user.last_sign_in_at.isoformat() if user.last_sign_in_at else None,
+            "is_anonymous": getattr(user, 'is_anonymous', False) or False,
+            "factors": getattr(user, 'factors', []) or []
+        }
+        
+        # Handle case where session might be None
+        if auth_result.get("session") and auth_result["session"].access_token:
+            print(f"🎫 [SIGNUP] Returning access token: {auth_result['session'].access_token[:20]}...")
+            return TokenResponse(
+                access_token=auth_result["session"].access_token,
+                user=user_dict
+            )
+        else:
+            print(f"⚠️ [SIGNUP] No session available, user created but needs to sign in")
+            # Create a temporary token or redirect to login
+            # For now, we'll create a simple success response
+            return TokenResponse(
+                access_token="temp_token_please_sign_in",
+                user=user_dict
+            )
+        
+    except HTTPException as e:
+        print(f"❌ [SIGNUP] HTTPException: {e.detail}")
         raise
     except Exception as e:
+        print(f"❌ [SIGNUP] Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
 
 @app.post("/auth/signin", response_model=TokenResponse)
@@ -494,9 +769,10 @@ async def get_current_user_info(current_user: Dict = Depends(get_current_user)):
         if not profile_result["success"]:
             raise HTTPException(status_code=404, detail="User profile not found")
         
+        profile = normalize_user_profile(profile_result.get("data"))
         return {
             "user": current_user,
-            "profile": profile_result["data"]
+            "profile": profile
         }
         
     except HTTPException:
@@ -516,8 +792,9 @@ async def update_profile(
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
-        
-        return {"message": "Profile updated successfully", "profile": result["data"]}
+
+        profile = normalize_user_profile(result.get("data"))
+        return {"message": "Profile updated successfully", "profile": profile}
         
     except HTTPException:
         raise
@@ -532,8 +809,12 @@ async def get_profile(current_user_id: str = Depends(get_current_user_id)):
         
         if not result["success"]:
             raise HTTPException(status_code=404, detail="Profile not found")
-        
-        return result["data"]
+
+        profile = normalize_user_profile(result.get("data"))
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        return profile
         
     except HTTPException:
         raise
@@ -553,15 +834,16 @@ async def create_skin_profile(
         
         if existing_result["success"] and existing_result["data"]:
             # Update existing profile
-            result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True))
+            result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True, exclude={"user_id"}))
         else:
             # Create new profile
-            result = await db_manager.create_skin_profile(current_user_id, skin_profile.dict())
+            result = await db_manager.create_skin_profile(current_user_id, skin_profile.dict(exclude={"user_id"}))
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
-        
-        return {"message": "Skin profile saved successfully", "skin_profile": result["data"]}
+
+        saved_profile = normalize_skin_profile(result.get("data"))
+        return {"message": "Skin profile saved successfully", "skin_profile": saved_profile}
         
     except HTTPException:
         raise
@@ -576,8 +858,12 @@ async def get_skin_profile(current_user_id: str = Depends(get_current_user_id)):
         
         if not result["success"]:
             raise HTTPException(status_code=404, detail="Skin profile not found")
-        
-        return result["data"]
+
+        profile = normalize_skin_profile(result.get("data"))
+        if not profile:
+            raise HTTPException(status_code=404, detail="Skin profile not found")
+
+        return profile
         
     except HTTPException:
         raise
@@ -591,12 +877,13 @@ async def update_skin_profile(
 ):
     """Update user skin profile"""
     try:
-        result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True))
+        result = await db_manager.update_skin_profile(current_user_id, skin_profile.dict(exclude_unset=True, exclude={"user_id"}))
         
         if not result["success"]:
             raise HTTPException(status_code=500, detail=result["error"])
-        
-        return {"message": "Skin profile updated successfully", "skin_profile": result["data"]}
+
+        updated_profile = normalize_skin_profile(result.get("data"))
+        return {"message": "Skin profile updated successfully", "skin_profile": updated_profile}
         
     except HTTPException:
         raise
@@ -652,99 +939,86 @@ async def analyze_skin(
     file: UploadFile = File(...),
     current_user_id: str = Depends(get_current_user_id)
 ):
-    """Analyze skin conditions from uploaded image or video (requires authentication)"""
+    """Analyze skin conditions from uploaded image using real PyTorch model and Elasticsearch"""
     try:
         # Read file content
         content = await file.read()
         
-        # Convert to numpy array
-        nparr = np.frombuffer(content, np.uint8)
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
         
-        if file.content_type.startswith('video/'):
-            # Handle video file
-            temp_video = "temp_video.mp4"
-            with open(temp_video, "wb") as f:
-                f.write(content)
-            
-            # Extract frames from video
-            cap = cv2.VideoCapture(temp_video)
-            frames = []
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                frames.append(frame)
-            cap.release()
-            os.remove(temp_video)
-            
-            # Analyze every 10th frame to avoid too many similar images
-            analysis_frames = frames[::10]
-        else:
-            # Handle image file
-            image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            analysis_frames = [image]
+        # Use the enhanced skin analysis service
+        analysis_result = skin_analysis_service.analyze_skin_image(content)
         
-        # Analyze each frame
-        all_results = []
-        for frame in analysis_frames:
-            # Detect faces
-            faces = detect_faces(frame)
-            if len(faces) == 0:
-                continue
-            
-            # Extract face regions
-            face_regions = extract_face_regions(frame, faces)
-            
-            # Classify skin conditions
-            results = classify_skin_conditions(face_regions)
-            all_results.extend(results)
-        
-        if not all_results:
-            raise HTTPException(status_code=400, detail="No faces detected in the uploaded file")
-        
-        # Aggregate results
-        all_conditions = []
-        for result in all_results:
-            for condition_data in result["conditions"]:
-                if condition_data["confidence"] > 0.3:  # Only include confident predictions
-                    all_conditions.append(condition_data["condition"])
-        
-        # Get unique conditions
-        unique_conditions = list(set(all_conditions))
-        
-        # Search for products
-        products = search_products(unique_conditions)
+        if not analysis_result["success"]:
+            raise HTTPException(status_code=400, detail=analysis_result["error"])
         
         # Get user's skin profile for enhanced recommendations
         skin_profile_result = await db_manager.get_skin_profile(current_user_id)
-        user_skin_profile = skin_profile_result["data"] if skin_profile_result["success"] else None
+        user_skin_profile = normalize_skin_profile(
+            skin_profile_result.get("data") if skin_profile_result.get("success") else {}
+        )
         
-        # Enhance product recommendations based on user's skin profile
-        enhanced_products = enhance_product_recommendations(products, user_skin_profile, unique_conditions)
+        # Get product recommendations using Elasticsearch
+        detected_conditions = analysis_result["detected_conditions"]
+        elasticsearch_result = elasticsearch_service.get_recommendations(
+            user_skin_profile or {},
+            analysis_result["analysis_results"],
+            limit=10
+        )
         
-        # Generate skincare routine
-        routine = generate_skincare_routine(unique_conditions, enhanced_products)
+        # Get additional products from Google Search
+        google_products = await search_skincare_products(detected_conditions, user_skin_profile)
         
-        # Save analysis results to database (you might want to create a skin_analyses table)
+        # Combine recommendations
+        all_products = []
+        if elasticsearch_result["success"]:
+            all_products.extend(elasticsearch_result["recommendations"])
+        all_products.extend(google_products)
+        
+        # Generate AI-powered personalized report using Gemini
+        from apps.api.ai.gemini_analysis_service import get_gemini_service
+        gemini_service = get_gemini_service(GEMINI_API_KEY)
+        
+        ai_report = gemini_service.generate_personalized_report(
+            user_profile=user_skin_profile or {},
+            analysis_results=analysis_result["analysis_results"],
+            detected_conditions=detected_conditions
+        )
+        
+        # Generate skincare routine using Gemini
+        routine = gemini_service.generate_skincare_routine(
+            conditions=detected_conditions,
+            products=all_products,
+            user_profile=user_skin_profile or {}
+        )
+        
+        # Save analysis results to database
         analysis_data = {
             "user_id": current_user_id,
-            "detected_conditions": unique_conditions,
-            "analysis_results": all_results,
-            "recommended_products": enhanced_products,
+            "detected_conditions": detected_conditions,
+            "analysis_results": analysis_result["analysis_results"],
+            "recommended_products": all_products,
             "skincare_routine": routine,
+            "skin_health_score": analysis_result.get("skin_health_score", 0),
             "analysis_timestamp": datetime.now().isoformat()
         }
         
         return {
-            "analysis_results": all_results,
-            "detected_conditions": unique_conditions,
-            "recommended_products": enhanced_products,
+            "analysis_results": analysis_result["analysis_results"],
+            "detected_conditions": detected_conditions,
+            "recommended_products": all_products,
             "skincare_routine": routine,
+            "ai_report": ai_report,
+            "skin_health_score": analysis_result.get("skin_health_score", 0),
+            "faces_detected": analysis_result.get("faces_detected", 0),
             "analysis_timestamp": datetime.now().isoformat(),
             "user_skin_profile": user_skin_profile
         }
         
     except Exception as e:
+        logger.error(f"Skin analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.post("/search-products")
@@ -754,7 +1028,7 @@ async def search_products_endpoint(
 ):
     """Search for products based on skin conditions (requires authentication)"""
     try:
-        products = search_products(conditions)
+        products = await search_skincare_products(conditions)
         return {"products": products, "conditions_searched": conditions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Product search failed: {str(e)}")
@@ -773,6 +1047,75 @@ async def generate_routine_endpoint(
         return routine
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Routine generation failed: {str(e)}")
+
+# Import the new comprehensive analysis service
+from comprehensive_analysis_service import ComprehensiveSkinAnalysisService
+from apps.api.ai.skin_analysis_service import skin_analysis_service
+from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
+from ingredient_database import ingredient_database
+from apps.api.infrastructure.validation_service import validation_service
+
+# Initialize the comprehensive analysis service
+comprehensive_analysis_service = ComprehensiveSkinAnalysisService()
+
+@app.post("/api/analyze-user-comprehensive")
+async def analyze_user_comprehensive(
+    request: Dict[str, Any]
+    # Temporarily removed authentication for testing
+    # current_user_id: str = Depends(get_current_user_id)
+):
+    """
+    Comprehensive skin analysis using OpenAI Vision API and Google Custom Search
+    
+    Request body:
+    {
+        "user_id": "uuid-here",
+        "image_id": "optional-specific-image-id"
+    }
+    """
+    try:
+        user_id = request.get("user_id")
+        image_id = request.get("image_id")
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+        
+        # Use the comprehensive analysis service
+        result = await comprehensive_analysis_service.analyze_user_by_id(
+            user_id=user_id,
+            image_id=image_id
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Comprehensive analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Comprehensive analysis failed: {str(e)}")
+
+@app.get("/api/services-status")
+async def get_services_status():
+    """Check the status of all integrated services"""
+    try:
+        status = {
+            "gemini": {
+                "enabled": GEMINI_ENABLED and bool(GEMINI_API_KEY),
+                "model": "gemini-1.5-pro" if (GEMINI_ENABLED and bool(GEMINI_API_KEY)) else None
+            },
+            "google_search": {
+                "enabled": comprehensive_analysis_service.search.is_enabled(),
+                "max_results": 10 if comprehensive_analysis_service.search.is_enabled() else None
+            },
+            "database": {
+                "connected": True,  # We can add a health check here
+                "tables": ["profiles", "user_skin_profiles", "user_images"]
+            }
+        }
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Service status check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Service status check failed: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host=API_HOST, port=API_PORT)

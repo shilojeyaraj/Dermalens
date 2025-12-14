@@ -4,8 +4,12 @@ Configuration settings for Dermalens Backend
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (optional)
+try:
+    load_dotenv()
+except Exception as e:
+    print(f"Warning: Could not load .env file: {e}")
+    print("Using default configuration values")
 
 # Supabase Configuration
 SUPABASE_URL = "https://ezlevlxkxanlceofykrh.supabase.co"
@@ -15,12 +19,17 @@ SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 # Google Custom Search API Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyAtT3Jon9cWkbfnNLR91F9J810vvjzu8JY")
 GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "c0918e3def8a94b63")
+GOOGLE_WEB_SEARCH_API_KEY = GOOGLE_API_KEY  # Alias for compatibility
 GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
 
 # OpenAI API Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")  # gpt-4o has vision capabilities
 OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "False").lower() == "true"
+
+# Gemini API Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_ENABLED = os.getenv("GEMINI_ENABLED", "True").lower() == "true"
 
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
