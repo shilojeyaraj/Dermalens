@@ -201,21 +201,36 @@ def generate_sample_products(count=1000):
     
     return products
 
-def seed_elasticsearch():
-    """Seed Elasticsearch with sample data"""
+def seed_elasticsearch(products=None):
+    """Seed Elasticsearch with sample data
+    
+    Args:
+        products: Optional list of products to seed. If None, generates 1000 products.
+    """
     try:
-        # Ensure we can import the shared Elasticsearch service from project root
-        PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        if PROJECT_ROOT not in sys.path:
-            sys.path.insert(0, PROJECT_ROOT)
-        from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
+        # Ensure we can import the shared Elasticsearch service regardless of package layout
+        API_ROOT = os.path.abspath(os.path.dirname(__file__))
+        if API_ROOT not in sys.path:
+            sys.path.insert(0, API_ROOT)
+        try:
+            # Prefer relative import when running inside the API container
+            from infrastructure.elasticsearch_service import elasticsearch_service
+        except Exception:
+            # Fallback to project-root style import if package available
+            PROJECT_ROOT = os.path.abspath(os.path.join(API_ROOT, '..'))
+            if PROJECT_ROOT not in sys.path:
+                sys.path.insert(0, PROJECT_ROOT)
+            from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
         
         print("🌱 Seeding Elasticsearch with sample data...")
         
-        # Generate sample products
-        print("📦 Generating sample products...")
-        products = generate_sample_products(1000)
-        print(f"✅ Generated {len(products)} products")
+        # Generate sample products if not provided
+        if products is None:
+            print("📦 Generating sample products...")
+            products = generate_sample_products(1000)
+            print(f"✅ Generated {len(products)} products")
+        else:
+            print(f"📦 Using {len(products)} provided products")
         
         # Index products in batches
         batch_size = 100
@@ -251,11 +266,14 @@ def seed_elasticsearch():
         else:
             print(f"❌ Search test failed: {test_result.get('error')}")
         
-        return True
+        return {"success": True, "total_indexed": total_indexed}
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"❌ Error seeding Elasticsearch: {e}")
-        return False
+        print(f"❌ Traceback: {error_details}")
+        return {"success": False, "error": str(e), "traceback": error_details}
 
 def main():
     """Main function"""
@@ -264,10 +282,16 @@ def main():
     
     # Check if Elasticsearch is running
     try:
-        PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        if PROJECT_ROOT not in sys.path:
-            sys.path.insert(0, PROJECT_ROOT)
-        from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
+        API_ROOT = os.path.abspath(os.path.dirname(__file__))
+        if API_ROOT not in sys.path:
+            sys.path.insert(0, API_ROOT)
+        try:
+            from infrastructure.elasticsearch_service import elasticsearch_service
+        except Exception:
+            PROJECT_ROOT = os.path.abspath(os.path.join(API_ROOT, '..'))
+            if PROJECT_ROOT not in sys.path:
+                sys.path.insert(0, PROJECT_ROOT)
+            from apps.api.infrastructure.elasticsearch_service import elasticsearch_service
         elasticsearch_service.es.ping()
         print("✅ Elasticsearch connection successful")
     except Exception as e:

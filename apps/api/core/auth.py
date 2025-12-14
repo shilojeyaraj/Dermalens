@@ -13,15 +13,83 @@ import sys
 import os
 
 from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
+import logging
+from urllib.parse import urlparse
 
-# Initialize Supabase client for auth operations
-supabase_auth: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+logger = logging.getLogger(__name__)
 
-# Initialize Supabase admin client
-supabase_admin: Client = create_client(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_KEY
-)
+# Validate Supabase URL format
+def validate_supabase_url(url: str) -> bool:
+    """Validate that Supabase URL is properly formatted"""
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        if parsed.scheme not in ['http', 'https']:
+            return False
+        return True
+    except Exception:
+        return False
+
+# Initialize Supabase client for auth operations with connection options
+# Use lazy initialization to prevent startup crashes
+supabase_auth: Optional[Client] = None
+supabase_admin: Optional[Client] = None
+
+def get_supabase_auth() -> Client:
+    """Get or create Supabase auth client with lazy initialization"""
+    global supabase_auth
+    if supabase_auth is None:
+        try:
+            # Validate URL
+            if not validate_supabase_url(SUPABASE_URL):
+                raise ValueError(f"Invalid Supabase URL format: {SUPABASE_URL}")
+            
+            # Configure client with options for Cloud Run
+            supabase_options = {
+                "auto_refresh_token": False,
+                "persist_session": False,
+            }
+            
+            print(f"[AUTH] Initializing Supabase client with URL: {SUPABASE_URL}")
+            print(f"[AUTH] URL parsed - scheme: {urlparse(SUPABASE_URL).scheme}, netloc: {urlparse(SUPABASE_URL).netloc}")
+            
+            supabase_auth = create_client(SUPABASE_URL, SUPABASE_ANON_KEY, options=supabase_options)
+            print(f"[AUTH] Supabase auth client created successfully")
+        except Exception as e:
+            print(f"[AUTH] ERROR: Failed to create Supabase auth client: {str(e)}")
+            print(f"[AUTH] Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            raise
+    return supabase_auth
+
+def get_supabase_admin() -> Client:
+    """Get or create Supabase admin client with lazy initialization"""
+    global supabase_admin
+    if supabase_admin is None:
+        try:
+            # Validate URL
+            if not validate_supabase_url(SUPABASE_URL):
+                raise ValueError(f"Invalid Supabase URL format: {SUPABASE_URL}")
+            
+            # Configure client with options for Cloud Run
+            supabase_options = {
+                "auto_refresh_token": False,
+                "persist_session": False,
+            }
+            
+            supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY, options=supabase_options)
+            print(f"[AUTH] Supabase admin client created successfully")
+        except Exception as e:
+            print(f"[AUTH] ERROR: Failed to create Supabase admin client: {str(e)}")
+            print(f"[AUTH] Error type: {type(e).__name__}")
+            import traceback
+            traceback.print_exc()
+            raise
+    return supabase_admin
 
 # HTTP Bearer token security
 security = HTTPBearer()
@@ -30,7 +98,13 @@ class AuthManager:
     """Handles all authentication operations using custom database functions"""
     
     def __init__(self):
-        self.supabase = supabase_auth
+        self.supabase = None  # Will be initialized lazily
+    
+    def _get_supabase(self) -> Client:
+        """Get Supabase client with lazy initialization"""
+        if self.supabase is None:
+            self.supabase = get_supabase_auth()
+        return self.supabase
     
     async def sign_up(self, email: str, password: str) -> Dict:
         """Sign up a new user using custom database function"""
@@ -39,16 +113,67 @@ class AuthManager:
         try:
             # Use the custom database function register_user_with_rls
             print(f" [AUTH] Calling register_user_with_rls function...")
-            result = self.supabase.rpc(
-                'register_user_with_rls',
-                {
-                    'user_email': email,
-                    'user_password': password,
-                    'user_username': email.split('@')[0]  # Use email prefix as username
-                }
-            ).execute()
+            print(f" [AUTH] Supabase URL: {SUPABASE_URL}")
+            print(f" [AUTH] Email: {email}")
             
-            print(f" [AUTH] Registration result: {result}")
+            # Get Supabase client
+            supabase = self._get_supabase()
+            
+            # Test connection first
+            try:
+                # Simple test query to verify connection
+                test_result = supabase.table('profiles').select('id').limit(1).execute()
+                print(f" [AUTH] Connection test successful")
+            except Exception as conn_error:
+                print(f" [AUTH] Connection test failed: {str(conn_error)}")
+                print(f" [AUTH] Connection error type: {type(conn_error).__name__}")
+                import traceback
+                traceback.print_exc()
+                return {
+                    "success": False,
+                    "error": f"Database connection failed: {str(conn_error)}"
+                }
+            
+            # Retry logic for RPC calls (DNS/network issues)
+            max_retries = 3
+            result = None
+            last_error = None
+            
+            for attempt in range(max_retries):
+                try:
+                    print(f" [AUTH] RPC call attempt {attempt + 1}/{max_retries}")
+                    result = supabase.rpc(
+                        'register_user_with_rls',
+                        {
+                            'user_email': email,
+                            'user_password': password,
+                            'user_username': email.split('@')[0]  # Use email prefix as username
+                        }
+                    ).execute()
+                    print(f" [AUTH] Registration result: {result}")
+                    break  # Success, exit retry loop
+                except Exception as rpc_error:
+                    last_error = rpc_error
+                    error_str = str(rpc_error)
+                    print(f" [AUTH] RPC call attempt {attempt + 1} failed: {error_str}")
+                    print(f" [AUTH] Error type: {type(rpc_error).__name__}")
+                    
+                    # If it's a DNS error, wait before retrying
+                    if "Name or service not known" in error_str or "Errno -2" in error_str:
+                        if attempt < max_retries - 1:
+                            import time
+                            wait_time = (attempt + 1) * 2  # Exponential backoff: 2s, 4s, 6s
+                            print(f" [AUTH] DNS error detected, waiting {wait_time}s before retry...")
+                            time.sleep(wait_time)
+                        else:
+                            # Last attempt failed
+                            raise Exception(f"Failed to connect to Supabase after {max_retries} attempts. DNS resolution error: {error_str}")
+                    else:
+                        # Non-DNS error, don't retry
+                        raise
+            
+            if result is None:
+                raise Exception(f"RPC call failed after {max_retries} attempts: {last_error}")
             
             if result.data and len(result.data) > 0:
                 user_data = result.data[0]
@@ -99,7 +224,8 @@ class AuthManager:
         try:
             # Use the custom database function authenticate_user_with_rls
             print(f" [AUTH] Calling authenticate_user_with_rls function...")
-            result = self.supabase.rpc(
+            supabase = self._get_supabase()
+            result = supabase.rpc(
                 'authenticate_user_with_rls',
                 {
                     'user_email': email,
@@ -172,7 +298,8 @@ class AuthManager:
                 }
             
             # Get user profile from database
-            result = self.supabase.rpc(
+            supabase = self._get_supabase()
+            result = supabase.rpc(
                 'get_user_profile_with_rls',
                 {'user_uuid': user_id}
             ).execute()

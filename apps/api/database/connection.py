@@ -26,8 +26,28 @@ class DatabaseManager:
         print(f"[DATABASE] Service Key: {SUPABASE_SERVICE_KEY[:20]}...")
         print(f"[DATABASE] Tables: {PROFILES_TABLE}, {USER_IMAGES_TABLE}, {USER_SKIN_PROFILES_TABLE}")
         
-        self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-        print(f"[DATABASE] Supabase client created successfully")
+        try:
+            # Configure client with options for Cloud Run
+            supabase_options = {
+                "auto_refresh_token": False,
+                "persist_session": False,
+            }
+            
+            self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY, options=supabase_options)
+            print(f"[DATABASE] Supabase client created successfully")
+            
+            # Test connection
+            try:
+                test_result = self.supabase.table(PROFILES_TABLE).select('id').limit(1).execute()
+                print(f"[DATABASE] Connection test successful")
+            except Exception as conn_error:
+                print(f"[DATABASE] WARNING: Connection test failed: {str(conn_error)}")
+                print(f"[DATABASE] Connection error type: {type(conn_error).__name__}")
+                # Don't fail initialization, but log the warning
+        except Exception as e:
+            print(f"[DATABASE] ERROR: Failed to create Supabase client: {str(e)}")
+            print(f"[DATABASE] Error type: {type(e).__name__}")
+            raise
     
     # Profile Operations
     async def create_profile(self, user_id: str, email: str, username: str = None, profile_picture: str = None, first_name: str = None, last_name: str = None) -> Dict:

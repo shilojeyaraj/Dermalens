@@ -36,7 +36,7 @@ ELASTICSEARCH_SSL_VERIFY = os.getenv("ELASTICSEARCH_SSL_VERIFY", "true").lower()
 
 # API Configuration
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
-API_PORT = int(os.getenv("PORT", 8000))
+API_PORT = int(os.getenv("PORT", 8080))  # Default to 8080 for Cloud Run
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # CORS Configuration

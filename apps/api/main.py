@@ -30,7 +30,13 @@ from monitoring.performance import performance_monitoring_service
 # Import existing services
 from database.connection import db_manager, UserProfileCreate, UserProfileUpdate, SkinProfileCreate, SkinProfileUpdate, UserImageCreate
 from core.auth import auth_manager, get_current_user, get_current_user_id, SignUpRequest, SignInRequest, PasswordResetRequest, TokenResponse
-from infrastructure.elasticsearch_service import elasticsearch_service
+try:
+    from infrastructure.elasticsearch_service import elasticsearch_service
+    ELASTICSEARCH_AVAILABLE = elasticsearch_service is not None
+except Exception as e:
+    logger.warning(f"Elasticsearch service not available: {e}")
+    elasticsearch_service = None
+    ELASTICSEARCH_AVAILABLE = False
 from infrastructure.google_search_service import google_search_service
 
 # Import seeding function
@@ -67,7 +73,9 @@ app = FastAPI(
 # Auto-seed database if empty
 async def auto_seed_database():
     """Automatically seed the database if it's empty"""
-    if not SEEDING_AVAILABLE:
+    if not SEEDING_AVAILABLE or not ELASTICSEARCH_AVAILABLE:
+        if not ELASTICSEARCH_AVAILABLE:
+            logger.warning("⚠️  Elasticsearch not available, skipping auto-seeding")
         return
         
     try:
@@ -491,19 +499,48 @@ async def analyze_skin_multi_angle(
                 profile_concerns = user_profile["primary_concerns"]
                 if isinstance(profile_concerns, list):
                     combined_concerns.extend(profile_concerns)
+                elif isinstance(profile_concerns, str):
+                    # Handle comma-separated string
+                    combined_concerns.extend([c.strip() for c in profile_concerns.split(',') if c.strip()])
                 else:
-                    combined_concerns.append(profile_concerns)
+                    combined_concerns.append(str(profile_concerns))
                 logger.info(f"   - Profile concerns: {profile_concerns}")
+            
+            # Add skin type as a condition
+            if user_profile.get("skin_type"):
+                skin_type_lower = user_profile["skin_type"].lower()
+                if "oily" in skin_type_lower:
+                    combined_concerns.append("oil_control")
+                elif "dry" in skin_type_lower:
+                    combined_concerns.append("hydration")
+                elif "sensitive" in skin_type_lower:
+                    combined_concerns.append("sensitive_skin")
+                elif "combination" in skin_type_lower:
+                    combined_concerns.append("combination_care")
+                logger.info(f"   - Skin type: {user_profile['skin_type']}")
             
             # Add skin concerns from profile
             if user_profile.get("skin_concerns"):
-                combined_concerns.append(user_profile["skin_concerns"])
-                logger.info(f"   - Skin concerns: {user_profile['skin_concerns']}")
+                skin_concerns = user_profile["skin_concerns"]
+                if isinstance(skin_concerns, str):
+                    combined_concerns.extend([c.strip() for c in skin_concerns.split(',') if c.strip()])
+                else:
+                    combined_concerns.append(str(skin_concerns))
+                logger.info(f"   - Skin concerns: {skin_concerns}")
             
             # Add allergies as sensitivity concerns
             if user_profile.get("allergies"):
-                combined_concerns.append("sensitive_skin")
-                logger.info(f"   - Allergies detected: {user_profile['allergies']}")
+                allergies = user_profile["allergies"]
+                if allergies and str(allergies).strip():
+                    combined_concerns.append("sensitive_skin")
+                    logger.info(f"   - Allergies detected: {allergies}")
+            
+            # Add routine frequency preferences (used in routine generation)
+            if user_profile.get("routine_frequency"):
+                logger.info(f"   - Routine frequency: {user_profile['routine_frequency']}")
+            
+            # Log all profile fields being used
+            logger.info(f"✅ Profile integration complete - Using: skin_type, primary_concerns, skin_concerns, allergies, routine_frequency")
         
         # Combine scan conditions with profile concerns
         all_conditions = list(set(combined_conditions + combined_concerns))
@@ -605,9 +642,13 @@ async def analyze_skin_multi_angle(
             logger.info("🔄 Generated fallback recommendations")
         
         # Build comprehensive routine from scan + profile data
+        # Ensure we always return proper structure even if empty
         routine = {
             "morning_routine": [],
-            "evening_routine": []
+            "evening_routine": [],
+            "total_products": 0,
+            "estimated_cost": 0.0,
+            "generated_at": datetime.now().isoformat()
         }
         
         if recs.get("success") and recs.get("recommendations") and len(recs.get("recommendations", [])) > 0:
@@ -686,6 +727,20 @@ async def analyze_skin_multi_angle(
                     "url": moisturizer.get("url") or moisturizer.get("product_url"), 
                     "instructions": "Apply generously for overnight repair."
                 })
+            
+            # Calculate total products and estimated cost
+            routine["total_products"] = len(routine["morning_routine"]) + len(routine["evening_routine"])
+            total_cost = 0.0
+            for item in routine["morning_routine"] + routine["evening_routine"]:
+                # Try to extract price from recommendations if available
+                for rec in rec_products:
+                    if rec.get("name") == item.get("product"):
+                        price_str = str(rec.get("price", "0")).replace("$", "").replace(",", "")
+                        try:
+                            total_cost += float(price_str)
+                        except:
+                            pass
+            routine["estimated_cost"] = total_cost if total_cost > 0 else 150.0
         else:
             # Fallback routine when no specific recommendations are available
             logger.info("📋 Creating fallback routine based on profile data")
@@ -813,6 +868,18 @@ async def analyze_skin_multi_angle(
                     "instructions": "Rich moisturizer for overnight repair."
                 }
             ]
+            
+            # Calculate total products and estimated cost for fallback routine
+            routine["total_products"] = len(routine["morning_routine"]) + len(routine["evening_routine"])
+            routine["estimated_cost"] = 120.0  # Default estimate for fallback routine
+        
+        # Ensure routine always has the required fields
+        if "total_products" not in routine:
+            routine["total_products"] = len(routine.get("morning_routine", [])) + len(routine.get("evening_routine", []))
+        if "estimated_cost" not in routine:
+            routine["estimated_cost"] = 120.0
+        if "generated_at" not in routine:
+            routine["generated_at"] = datetime.now().isoformat()
         
         # Combine results from all angles with recommendations
         combined_result = {
@@ -970,6 +1037,17 @@ async def products_search(
         skin_types = [skin_type] if skin_type else None
 
         # Use Elasticsearch with optional brand filtering by keyword match
+        if not ELASTICSEARCH_AVAILABLE:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Product search service is temporarily unavailable",
+                    "products": [],
+                    "total": 0
+                }
+            )
+        
         from_offset = max(0, (page - 1) * max(1, limit))
         result = elasticsearch_service.search_products(
             query=q or "",
@@ -1058,6 +1136,17 @@ async def products_trending(
 ):
     """Return a simple set of trending products from Elasticsearch by rating/reviews, with optional brand and price filters."""
     try:
+        if not ELASTICSEARCH_AVAILABLE:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Product search service is temporarily unavailable",
+                    "products": [],
+                    "total": 0
+                }
+            )
+        
         # Build price range filter if provided
         price_range = None
         if min_price is not None or max_price is not None:

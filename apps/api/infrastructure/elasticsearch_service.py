@@ -20,33 +20,78 @@ class ElasticsearchProductService:
         if elasticsearch_url is None:
             elasticsearch_url = ELASTICSEARCH_URL
         
-        # Configure Elasticsearch client with authentication
-        if ELASTICSEARCH_API_KEY:
-            # Use API key authentication
-            self.es = Elasticsearch(
-                [elasticsearch_url],
-                api_key=ELASTICSEARCH_API_KEY,
-                verify_certs=ELASTICSEARCH_SSL_VERIFY
-            )
-        elif ELASTICSEARCH_USERNAME and ELASTICSEARCH_PASSWORD:
-            # Use basic authentication
-            self.es = Elasticsearch(
-                [elasticsearch_url],
-                basic_auth=(ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD),
-                verify_certs=ELASTICSEARCH_SSL_VERIFY
-            )
-        else:
-            # No authentication (local development)
-            self.es = Elasticsearch([elasticsearch_url])
+        # Store configuration for lazy initialization
+        self.elasticsearch_url = elasticsearch_url
+        self.elasticsearch_api_key = ELASTICSEARCH_API_KEY
+        self.elasticsearch_username = ELASTICSEARCH_USERNAME
+        self.elasticsearch_password = ELASTICSEARCH_PASSWORD
+        self.elasticsearch_ssl_verify = ELASTICSEARCH_SSL_VERIFY
         
+        # Initialize client as None - will be created on first use
+        self.es = None
         self.index_name = "skincare_products"
-        self.ensure_index_exists()
+        self._is_available = None  # None = not checked, True/False = checked
+    
+    def _ensure_connected(self):
+        """Lazy initialization of Elasticsearch client"""
+        if self.es is not None:
+            return True
+        
+        try:
+            # Configure Elasticsearch client with authentication
+            if self.elasticsearch_api_key:
+                # Use API key authentication
+                self.es = Elasticsearch(
+                    [self.elasticsearch_url],
+                    api_key=self.elasticsearch_api_key,
+                    verify_certs=self.elasticsearch_ssl_verify,
+                    request_timeout=5,  # Short timeout for faster failure
+                    max_retries=0  # Don't retry on failure
+                )
+            elif self.elasticsearch_username and self.elasticsearch_password:
+                # Use basic authentication
+                self.es = Elasticsearch(
+                    [self.elasticsearch_url],
+                    basic_auth=(self.elasticsearch_username, self.elasticsearch_password),
+                    verify_certs=self.elasticsearch_ssl_verify,
+                    request_timeout=5,
+                    max_retries=0
+                )
+            else:
+                # No authentication (local development)
+                self.es = Elasticsearch(
+                    [self.elasticsearch_url],
+                    request_timeout=5,
+                    max_retries=0
+                )
+            
+            # Test connection
+            if not self.es.ping():
+                logger.warning("Elasticsearch ping failed")
+                self.es = None
+                self._is_available = False
+                return False
+            
+            # Ensure index exists
+            self.ensure_index_exists()
+            self._is_available = True
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to Elasticsearch: {e}")
+            self.es = None
+            self._is_available = False
+            return False
     
     def ensure_index_exists(self):
         """Create the skincare products index if it doesn't exist"""
-        if not self.es.indices.exists(index=self.index_name):
-            mapping = {
-                "mappings": {
+        if not self._ensure_connected():
+            return
+        
+        try:
+            if not self.es.indices.exists(index=self.index_name):
+                mapping = {
+                    "mappings": {
                     "properties": {
                         "name": {
                             "type": "text",
@@ -130,13 +175,20 @@ class ElasticsearchProductService:
                         }
                     }
                 }
-            }
-            
-            self.es.indices.create(index=self.index_name, body=mapping)
-            logger.info(f"Created Elasticsearch index: {self.index_name}")
+                }
+                
+                self.es.indices.create(index=self.index_name, body=mapping)
+                logger.info(f"Created Elasticsearch index: {self.index_name}")
+        except Exception as e:
+            logger.error(f"Error ensuring index exists: {e}")
+            self.es = None
+            self._is_available = False
     
     def index_product(self, product: Dict[str, Any]) -> str:
         """Index a single product in Elasticsearch"""
+        if not self._ensure_connected():
+            raise Exception("Elasticsearch is not available")
+        
         try:
             # Add timestamp
             product["created_at"] = datetime.now().isoformat()
@@ -160,6 +212,10 @@ class ElasticsearchProductService:
     
     def bulk_index_products(self, products: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Bulk index multiple products using helpers.bulk to build proper actions."""
+        if not self._ensure_connected():
+            logger.warning("Elasticsearch not available, skipping bulk indexing")
+            return {"success": False, "error": "Elasticsearch is not available", "indexed": 0, "errors": []}
+        
         try:
             actions = []
             for product in products:
@@ -198,6 +254,17 @@ class ElasticsearchProductService:
         from_: int = 0
     ) -> Dict[str, Any]:
         """Search products with advanced filtering and scoring"""
+        if not self._ensure_connected():
+            logger.warning("Elasticsearch not available, returning empty results")
+            return {
+                "success": False,
+                "error": "Elasticsearch is not available",
+                "products": [],
+                "total": 0,
+                "took": 0,
+                "max_score": 0
+            }
+        
         try:
             # Build the search query
             search_body = {
@@ -325,6 +392,16 @@ class ElasticsearchProductService:
         limit: int = 10
     ) -> Dict[str, Any]:
         """Get personalized product recommendations based on user profile and analysis"""
+        if not self._ensure_connected():
+            logger.warning("Elasticsearch not available, returning empty recommendations")
+            return {
+                "success": False,
+                "error": "Elasticsearch is not available",
+                "recommendations": [],
+                "total": 0,
+                "detected_conditions": []
+            }
+        
         try:
             # Extract conditions from analysis
             detected_conditions = []
@@ -453,6 +530,14 @@ class ElasticsearchProductService:
     
     def get_similar_products(self, product_id: str, limit: int = 5) -> Dict[str, Any]:
         """Get similar products using Elasticsearch's more_like_this query"""
+        if not self._ensure_connected():
+            logger.warning("Elasticsearch not available, returning empty similar products")
+            return {
+                "success": False,
+                "error": "Elasticsearch is not available",
+                "similar_products": []
+            }
+        
         try:
             search_body = {
                 "query": {
@@ -494,6 +579,18 @@ class ElasticsearchProductService:
     
     def get_analytics(self) -> Dict[str, Any]:
         """Get analytics about the product database"""
+        if not self._ensure_connected():
+            logger.warning("Elasticsearch not available, returning empty analytics")
+            return {
+                "success": False,
+                "error": "Elasticsearch is not available",
+                "total_products": 0,
+                "brands": [],
+                "product_types": [],
+                "average_rating": 0,
+                "price_stats": {}
+            }
+        
         try:
             # Get total count
             count_response = self.es.count(index=self.index_name)
@@ -539,5 +636,11 @@ class ElasticsearchProductService:
                 "error": str(e)
             }
 
-# Global service instance
-elasticsearch_service = ElasticsearchProductService()
+# Global service instance - lazy initialization prevents startup crashes
+try:
+    elasticsearch_service = ElasticsearchProductService()
+    logger.info("Elasticsearch service initialized (connection will be established on first use)")
+except Exception as e:
+    logger.error(f"Failed to initialize Elasticsearch service: {e}")
+    # Create a dummy service that returns empty results
+    elasticsearch_service = None

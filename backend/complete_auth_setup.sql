@@ -225,7 +225,7 @@ BEGIN
   END IF;
   
   -- Check if email already exists
-  IF EXISTS (SELECT 1 FROM users WHERE email = normalized_email) THEN
+  IF EXISTS (SELECT 1 FROM users u WHERE u.email = normalized_email) THEN
     RAISE EXCEPTION 'User with email % already exists', normalized_email;
   END IF;
   
@@ -290,10 +290,10 @@ BEGIN
   END IF;
   
   -- Find user by email
-  SELECT id, email, password_hash, is_active
+  SELECT u.id, u.email, u.password_hash, u.is_active
   INTO user_record
-  FROM users
-  WHERE email = normalized_email AND is_active = true;
+  FROM users u
+  WHERE u.email = normalized_email AND u.is_active = true;
   
   -- Check if user exists and password is correct
   IF user_record.id IS NULL OR NOT verify_password(user_password, user_record.password_hash) THEN

@@ -13,7 +13,13 @@ import os
 # Import existing services
 from database import db_manager
 from infrastructure.google_search_service import google_search_service
-from infrastructure.elasticsearch_service import elasticsearch_service
+try:
+    from infrastructure.elasticsearch_service import elasticsearch_service
+    ELASTICSEARCH_AVAILABLE = elasticsearch_service is not None
+except Exception as e:
+    logger.warning(f"Elasticsearch service not available: {e}")
+    elasticsearch_service = None
+    ELASTICSEARCH_AVAILABLE = False
 from ai.vertex_ai_service import vertex_ai_service
 
 # Import configuration
@@ -45,7 +51,7 @@ class EnhancedComprehensiveSkinAnalysisService:
         self.db = db_manager
         self.vertex_ai = vertex_ai_service
         self.search = google_search_service
-        self.elasticsearch = elasticsearch_service
+        self.elasticsearch = elasticsearch_service if ELASTICSEARCH_AVAILABLE else None
         
         # Service capabilities
         self.vertex_ai_enabled = VERTEX_AI_ENABLED
@@ -371,7 +377,7 @@ class EnhancedComprehensiveSkinAnalysisService:
             
             return {
                 "success": True,
-                "recommendations": all_recommendations[:10],  # Top 10
+                "recommendations": all_recommendations[:25],  # Top 25
                 "source": "elasticsearch+google",
                 "ai_powered": False
             }

@@ -1,0 +1,90 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+apps/api/node_modules/
+
+# Build outputs
+.next/
+frontend/.next/
+dist/
+build/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Backend API (deployed separately)
+apps/api/
+backend/
+
+# Data and models
+data/
+*.pth
+*.pkl
+*.h5
+
+# Logs
+*.log
+logs/
+
+# Environment files (use Vercel dashboard instead)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+*.test.*
+*.spec.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Deployment scripts
+deploy*.sh
+deploy*.ps1
+deploy*.bat
+
+# Cloud build
+cloudbuild.yaml
+*.yaml
+!vercel.json
+
+# Other
+Redis-*
+*.msi
+*.exe
