@@ -1,4 +1,4 @@
-// File: C:\Users\shilo\Dermalens\frontend\app\scan\enhanced\page.tsx
+// File: C:\Users\shilo\Dermalens\app\scan\enhanced\page.tsx
 import * as entry from '../../../../../app/scan/enhanced/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
