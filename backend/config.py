@@ -14,7 +14,7 @@ SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmF
 
 # Google Custom Search API Configuration
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyAtT3Jon9cWkbfnNLR91F9J810vvjzu8JY")
-GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "96653b7de4a3d49fe")
+GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID", "c0918e3def8a94b63")
 GOOGLE_SEARCH_ENABLED = os.getenv("GOOGLE_SEARCH_ENABLED", "True").lower() == "true"
 
 # OpenAI API Configuration

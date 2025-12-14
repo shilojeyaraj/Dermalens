@@ -80,14 +80,14 @@ export function FaceScanHUD({
   }
 
   // Capture image from video
-  const captureImage = (): File | null => {
-    if (!videoRef.current || !canvasRef.current) return null
+  const captureImage = (): Promise<File | null> => {
+    if (!videoRef.current || !canvasRef.current) return Promise.resolve(null)
     
     const canvas = canvasRef.current
     const video = videoRef.current
     const ctx = canvas.getContext('2d')
     
-    if (!ctx) return null
+    if (!ctx) return Promise.resolve(null)
     
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
@@ -192,8 +192,9 @@ export function FaceScanHUD({
             playSuccessSound()
             
             // Capture image when scan completes
-            const imageFile = captureImage()
-            setCapturedImage(imageFile)
+            captureImage().then(imageFile => {
+              setCapturedImage(imageFile)
+            })
             
             setTimeout(() => {
               onScanComplete?.()

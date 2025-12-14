@@ -10,8 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { useUser } from "@/contexts/user-context"
-import { SkinProfile } from "@/lib/api"
+import { useUser } from "@/contexts/user-context-simple"
+import { SkinProfile } from "../lib/api"
 import { Loader2, Save, User } from "lucide-react"
 
 interface SkinProfileFormProps {
@@ -44,10 +44,48 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
   const [customConcern, setCustomConcern] = useState("")
   const [customCondition, setCustomCondition] = useState("")
   const [customGoal, setCustomGoal] = useState("")
+  const [additionalInfo, setAdditionalInfo] = useState("")
+
+  // Load profile data on component mount
+  useEffect(() => {
+    console.log('📋 [SKIN PROFILE FORM] Component mounted, checking for stored profile...')
+    const storedProfile = localStorage.getItem('skinProfile')
+    if (storedProfile) {
+      try {
+        const parsedProfile = JSON.parse(storedProfile)
+        console.log('📋 [SKIN PROFILE FORM] Found stored profile on mount:', parsedProfile)
+        setFormData({
+          skin_type: parsedProfile.skin_type || "",
+          skin_tone: parsedProfile.skin_tone || "",
+          acne_severity: parsedProfile.acne_severity || "",
+          pore_size: parsedProfile.pore_size || "",
+          sensitivity_level: parsedProfile.sensitivity_level || "",
+          primary_concerns: parsedProfile.primary_concerns || [],
+          pre_existing_conditions: parsedProfile.pre_existing_conditions || [],
+          allergies: parsedProfile.allergies || [],
+          diet_type: parsedProfile.diet_type || "",
+          water_intake: parsedProfile.water_intake || "",
+          sleep_hours: parsedProfile.sleep_hours || "",
+          sun_exposure: parsedProfile.sun_exposure || "",
+          routine_frequency: parsedProfile.routine_frequency || "",
+          routine_type: parsedProfile.routine_type || "",
+          skin_goals: parsedProfile.skin_goals || []
+        })
+        setAdditionalInfo(parsedProfile.additional_info || "")
+        console.log('📋 [SKIN PROFILE FORM] Profile loaded on mount successfully')
+      } catch (error) {
+        console.error('📋 [SKIN PROFILE FORM] Error parsing profile on mount:', error)
+      }
+    }
+  }, [])
 
   // Load existing skin profile data
   useEffect(() => {
+    console.log('📋 [SKIN PROFILE FORM] useEffect triggered, skinProfile:', skinProfile)
+    
+    // Try to load from context first
     if (skinProfile) {
+      console.log('📋 [SKIN PROFILE FORM] Loading existing profile data from context:', skinProfile)
       setFormData({
         skin_type: skinProfile.skin_type || "",
         skin_tone: skinProfile.skin_tone || "",
@@ -65,6 +103,41 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
         routine_type: skinProfile.routine_type || "",
         skin_goals: skinProfile.skin_goals || []
       })
+      setAdditionalInfo(skinProfile.additional_info || "")
+      console.log('📋 [SKIN PROFILE FORM] Form data loaded successfully from context')
+    } else {
+      // Fallback: check localStorage directly
+      console.log('📋 [SKIN PROFILE FORM] No context profile, checking localStorage...')
+      const storedProfile = localStorage.getItem('skinProfile')
+      if (storedProfile) {
+        try {
+          const parsedProfile = JSON.parse(storedProfile)
+          console.log('📋 [SKIN PROFILE FORM] Loading profile from localStorage:', parsedProfile)
+          setFormData({
+            skin_type: parsedProfile.skin_type || "",
+            skin_tone: parsedProfile.skin_tone || "",
+            acne_severity: parsedProfile.acne_severity || "",
+            pore_size: parsedProfile.pore_size || "",
+            sensitivity_level: parsedProfile.sensitivity_level || "",
+            primary_concerns: parsedProfile.primary_concerns || [],
+            pre_existing_conditions: parsedProfile.pre_existing_conditions || [],
+            allergies: parsedProfile.allergies || [],
+            diet_type: parsedProfile.diet_type || "",
+            water_intake: parsedProfile.water_intake || "",
+            sleep_hours: parsedProfile.sleep_hours || "",
+            sun_exposure: parsedProfile.sun_exposure || "",
+            routine_frequency: parsedProfile.routine_frequency || "",
+            routine_type: parsedProfile.routine_type || "",
+            skin_goals: parsedProfile.skin_goals || []
+          })
+          setAdditionalInfo(parsedProfile.additional_info || "")
+          console.log('📋 [SKIN PROFILE FORM] Form data loaded successfully from localStorage')
+        } catch (error) {
+          console.error('📋 [SKIN PROFILE FORM] Error parsing stored profile:', error)
+        }
+      } else {
+        console.log('📋 [SKIN PROFILE FORM] No existing profile found in localStorage either')
+      }
     }
   }, [skinProfile])
 
@@ -127,6 +200,11 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
       })
     )
 
+    // Add additional information to the form data
+    if (additionalInfo.trim()) {
+      cleanedFormData.additional_info = additionalInfo.trim()
+    }
+
     console.log('🧹 [SKIN PROFILE] Cleaned form data:', cleanedFormData)
 
     try {
@@ -134,17 +212,28 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
         console.log('📝 [SKIN PROFILE] Updating existing profile...')
         await updateSkinProfile(cleanedFormData)
         console.log('✅ [SKIN PROFILE] Profile updated successfully')
+        alert('Profile updated successfully!')
       } else {
         console.log('🆕 [SKIN PROFILE] Creating new profile...')
         await createSkinProfile(cleanedFormData)
         console.log('✅ [SKIN PROFILE] Profile created successfully')
       }
-      console.log('🎯 [SKIN PROFILE] Calling onComplete callback...')
-      onComplete?.()
+      
+      // Handle completion or redirect with loading screen
+      if (onComplete) {
+        console.log('🎯 [SKIN PROFILE] Calling onComplete callback...')
+        onComplete()
+      } else {
+        // Show loading and redirect to face scan
+        console.log('📸 [SKIN PROFILE] Redirecting to face scan page...')
+        // Redirect immediately - the loading will show on the scan page
+        window.location.href = '/scan'
+      }
+      
       console.log('🏁 [SKIN PROFILE] Profile submission completed')
     } catch (error) {
       console.error('❌ [SKIN PROFILE] Failed to save skin profile:', error)
-      console.error('❌ [SKIN PROFILE] Error details:', error)
+      alert('Failed to save profile. Please try again.')
     }
   }
 
@@ -615,6 +704,22 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
 
             <Separator />
 
+            {/* Additional Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Additional Information</h3>
+              <p className="text-sm text-muted-foreground">
+                Tell us anything else about your skin, current routine, or specific concerns that might help us provide better recommendations.
+              </p>
+              <Textarea
+                placeholder="Describe your current skincare routine, any specific concerns, or anything else you'd like us to know about your skin..."
+                value={additionalInfo}
+                onChange={(e) => setAdditionalInfo(e.target.value)}
+                className="min-h-[120px] resize-none"
+              />
+            </div>
+
+            <Separator />
+
             {/* Skin Goals */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Skin Goals</h3>
@@ -654,7 +759,7 @@ export function SkinProfileForm({ onComplete, onCancel }: SkinProfileFormProps) 
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1"
+                className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-semibold border-2 border-green-700 shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 {isLoading ? (
                   <>

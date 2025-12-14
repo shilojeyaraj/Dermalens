@@ -1,7 +1,12 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/utils"
+// Simple cn function without external dependencies
+function cn(...classes: (string | undefined | null | boolean)[]): string {
+  return classes.filter(Boolean).join(' ')
+}
 
 const alertVariants = cva(
   "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",

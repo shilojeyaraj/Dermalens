@@ -1,9 +1,9 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import { registerUser, authenticateUser, getCurrentUser, logoutUser, isAuthenticated, setUserContext, clearUserContext, User as AuthUser } from "@/lib/custom-auth"
-import { apiClient, SkinProfile, AnalysisResult } from "@/lib/api"
-import { supabase } from "@/lib/supabase"
+import { registerUser, authenticateUser, getCurrentUser, logoutUser, isAuthenticated, setUserContext, clearUserContext, User as AuthUser } from "../lib/custom-auth"
+import { apiClient, SkinProfile, AnalysisResult } from "../lib/api"
+import { supabase } from "../lib/supabase"
 
 // Use the User type from custom-auth
 export type User = AuthUser
@@ -62,11 +62,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Set user context for RLS
       try {
         console.log('🔧 [FRONTEND] Setting user context on page load...')
-        setUserContext(user.id).then(() => {
+        const token = localStorage.getItem('token')
+        if (token) {
+          setUserContext(user, token)
           console.log('✅ [FRONTEND] User context set on page load')
-        }).catch((contextError) => {
-          console.error('❌ [FRONTEND] Failed to set user context on page load:', contextError)
-        })
+        }
       } catch (error) {
         console.error('❌ [FRONTEND] Error setting user context on page load:', error)
       }
@@ -114,7 +114,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
           // Ensure user context is set for RLS
           console.log('🔧 [LOAD PROFILE] Setting user context for RLS...')
           try {
-            await setUserContext(user.id)
+            const token = localStorage.getItem('token')
+            if (token) {
+              setUserContext(user, token)
+            }
             console.log('✅ [LOAD PROFILE] User context set successfully')
             
             // Add a small delay to ensure context is set
@@ -172,7 +175,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         // Set user context for RLS
         try {
           console.log('🔧 [FRONTEND] Setting user context for RLS...')
-          await setUserContext(response.user.id)
+          const token = localStorage.getItem('token')
+          if (token) {
+            setUserContext(response.user, token)
+          }
           console.log('✅ [FRONTEND] User context set successfully')
         } catch (contextError) {
           console.error('❌ [FRONTEND] Failed to set user context:', contextError)
@@ -209,7 +215,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         // Set user context for RLS
         try {
           console.log('🔧 [FRONTEND] Setting user context for RLS...')
-          await setUserContext(response.user.id)
+          const token = localStorage.getItem('token')
+          if (token) {
+            setUserContext(response.user, token)
+          }
           console.log('✅ [FRONTEND] User context set successfully')
           
           // Add a small delay to ensure context is set before any queries
@@ -255,10 +264,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsLoading(true)
       setError(null)
       const response = await apiClient.updateProfile(updates)
-      setUser({
-        ...response.profile,
-        username: response.profile.username || ''
-      })
+      if (response.success && response.data) {
+        setUser({
+          ...response.data,
+          username: response.data.username || ''
+        })
+      }
     } catch (error: any) {
       setError(error.message || 'Profile update failed')
       throw error
@@ -279,7 +290,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Ensure user context is set for RLS
       try {
         console.log('🔧 [USER CONTEXT] Setting user context for RLS...')
-        await setUserContext(user.id)
+        const token = localStorage.getItem('token')
+        if (token) {
+          setUserContext(user, token)
+        }
         console.log('✅ [USER CONTEXT] User context set successfully')
         
         // Add a small delay to ensure context is set
@@ -331,7 +345,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Ensure user context is set for RLS
       try {
         console.log('🔧 [USER CONTEXT] Setting user context for RLS...')
-        await setUserContext(user.id)
+        const token = localStorage.getItem('token')
+        if (token) {
+          setUserContext(user, token)
+        }
         console.log('✅ [USER CONTEXT] User context set successfully')
         
         // Add a small delay to ensure context is set
@@ -384,7 +401,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Ensure user context is set for RLS
       try {
         console.log('🔧 [USER CONTEXT] Setting user context for RLS...')
-        await setUserContext(user.id)
+        const token = localStorage.getItem('token')
+        if (token) {
+          setUserContext(user, token)
+        }
         console.log('✅ [USER CONTEXT] User context set successfully')
         
         // Add a small delay to ensure context is set
@@ -423,15 +443,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const result = await apiClient.analyzeSkin(file)
       
       // Save scan data locally
-      if (user) {
+      if (user && result.success && result.data) {
         const scanData: Omit<FaceScanData, 'id' | 'userId' | 'timestamp'> = {
-          conditions: result.analysis_results.flatMap(r => r.conditions),
-          analysisResults: result
+          conditions: result.data.conditions || [],
+          analysisResults: result.data
         }
         saveFaceScanData(scanData)
       }
       
-      return result
+      if (result.success && result.data) {
+        return result.data
+      } else {
+        throw new Error(result.error || 'Analysis failed')
+      }
     } catch (error: any) {
       setError(error.message || 'Skin analysis failed')
       throw error
@@ -455,7 +479,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       // For now, let's use a simple approach without authentication
       // since our custom auth doesn't use JWT tokens
-      const response = await fetch('http://localhost:8000/api/analyze-user-comprehensive', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/analyze-user-comprehensive`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

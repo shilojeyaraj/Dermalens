@@ -29,7 +29,7 @@ export function ServiceStatus() {
     const checkStatus = async () => {
       try {
         setLoading(true)
-        const response = await fetch('http://localhost:8000/api/services-status')
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/services-status`)
         
         if (!response.ok) {
           throw new Error('Failed to fetch service status')

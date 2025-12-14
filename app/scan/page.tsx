@@ -1,498 +1,655 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { FaceCapture } from "@/components/face-capture"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Camera, CheckCircle, AlertCircle, Upload, Loader2 } from "lucide-react"
-import { useUser } from "@/contexts/user-context"
-import { AnalysisResult } from "@/lib/api"
+import { Card, CardContent } from "@/components/ui/card"
+import { Camera, Sparkles, AlertCircle, ArrowRight, Video, VideoOff, Loader2, CheckCircle2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+
+type ScanStep = 'ready' | 'center' | 'left' | 'right' | 'analyzing' | 'analysis_complete' | 'complete'
 
 export default function ScanPage() {
-  const [isScanning, setIsScanning] = useState(false)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [scanComplete, setScanComplete] = useState(false)
-  const [showInstructions, setShowInstructions] = useState(true)
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
-  const [uploadMode, setUploadMode] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
-  const { analyzeSkin, analyzeSkinComprehensive, isLoading, error, clearError } = useUser()
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [currentStep, setCurrentStep] = useState<ScanStep>('ready')
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const [capturedImages, setCapturedImages] = useState<{
+    center: string[]
+    left: string[]
+    right: string[]
+  }>({ center: [], left: [], right: [] })
+  const [progress, setProgress] = useState(0)
+  const [cameraMounted, setCameraMounted] = useState(false)
+  const [analysisResults, setAnalysisResults] = useState<any>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisProgress, setAnalysisProgress] = useState(0)
+  const [showAnalysisComplete, setShowAnalysisComplete] = useState(false)
+  const captureIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleStartScan = () => {
-    setShowInstructions(false)
-    setIsScanning(true)
+  // Use ref to avoid closure issues
+  const capturedImagesRef = useRef(capturedImages)
+  
+  useEffect(() => {
+    capturedImagesRef.current = capturedImages
+  }, [capturedImages])
+
+  // Mount camera component
+  useEffect(() => {
+    setCameraMounted(true)
+    return () => {
+      // Cleanup
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+      }
+      if (captureIntervalRef.current) {
+        clearInterval(captureIntervalRef.current)
+      }
+    }
+  }, [stream])
+
+  // Connect stream to video element
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      console.log('🔗 Connecting stream to video element')
+      videoRef.current.srcObject = stream
+      
+      // Add event listeners for debugging
+      videoRef.current.onloadedmetadata = () => {
+        console.log('📹 Video metadata loaded')
+      }
+      
+      videoRef.current.oncanplay = () => {
+        console.log('▶️ Video can play')
+        // Auto-start scanning when video is ready
+        if (currentStep === 'ready') {
+          console.log('🚀 Auto-starting scan...')
+          setTimeout(() => startScan(), 1000)
+        }
+      }
+    }
+  }, [stream, currentStep])
+
+  // Start camera
+  const startCamera = async () => {
+    try {
+      console.log('🎥 Starting camera...')
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      })
+      
+      console.log('✅ Camera stream obtained:', mediaStream)
+      setStream(mediaStream)
+      setIsCameraActive(true)
+      
+      // Stream will be connected via useEffect when video ref is available
+      console.log('✅ Camera stream set, waiting for video element...')
+    } catch (error) {
+      console.error('❌ Camera access failed:', error)
+      alert(`Camera access failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please allow camera permissions and try again.`)
+    }
   }
 
-  const handleScanComplete = () => {
-    setIsScanning(false)
-    setIsAnalyzing(true)
+  // Stop camera
+  const stopCamera = async () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop())
+      setStream(null)
+    }
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current)
+    }
+    setIsCameraActive(false)
   }
 
-  const handleImageCapture = async (imageBlob: Blob) => {
+  // Capture frame
+  const captureFrame = async (): Promise<string | null> => {
+    if (!videoRef.current || !canvasRef.current) {
+      return null
+    }
+    
+    const canvas = canvasRef.current
+    const video = videoRef.current
+    const context = canvas.getContext('2d')
+    
+    if (!context || video.readyState !== video.HAVE_ENOUGH_DATA) {
+      return null
+    }
+    
+            try {
+              canvas.width = video.videoWidth
+              canvas.height = video.videoHeight
+              context.drawImage(video, 0, 0)
+      return canvas.toDataURL('image/jpeg', 0.85)
+            } catch (error) {
+      console.error('Error capturing frame:', error)
+      return null
+    }
+  }
+
+  // Scan position
+  const scanPosition = async (position: 'center' | 'left' | 'right'): Promise<void> => {
+    console.log(`📸 Starting scan for ${position} position`)
+    return new Promise<void>((resolve) => {
+      let captureCount = 0
+      const maxCaptures = 6
+      const captures: string[] = []
+      
+      // Countdown
+      let countdownValue = 3
+      setCountdown(countdownValue)
+      console.log(`⏰ Starting countdown for ${position}: ${countdownValue}`)
+      
+      const countdownInterval = setInterval(() => {
+        countdownValue--
+        if (countdownValue > 0) {
+          setCountdown(countdownValue)
+        } else {
+          clearInterval(countdownInterval)
+          setCountdown(null)
+          
+          // Capture frames
+          console.log(`📷 Starting frame capture for ${position}`)
+          captureIntervalRef.current = setInterval(async () => {
+            const frame = await captureFrame()
+            if (frame) {
+              captures.push(frame)
+              captureCount++
+              setProgress((captureCount / maxCaptures) * 100)
+              console.log(`📸 Captured frame ${captureCount}/${maxCaptures} for ${position}`)
+              
+              if (captureCount >= maxCaptures) {
+                if (captureIntervalRef.current) {
+                  clearInterval(captureIntervalRef.current)
+                }
+                
+                console.log(`✅ Completed ${position} scan with ${captures.length} frames`)
+                setCapturedImages(prev => ({
+                    ...prev,
+                    [position]: captures
+                }))
+                setProgress(0)
+                resolve()
+              }
+            } else {
+              console.warn(`⚠️ Failed to capture frame for ${position}`)
+            }
+          }, 500)
+        }
+      }, 1000)
+    })
+  }
+
+  // Start scan
+  const startScan = async () => {
+    console.log('🔍 Starting 3-angle scan...')
+    setCurrentStep('center')
+    console.log('📸 Scanning center position...')
+    await scanPosition('center')
+    
+    setCurrentStep('left')
+    console.log('📸 Scanning left position...')
+    await scanPosition('left')
+    
+    setCurrentStep('right')
+    console.log('📸 Scanning right position...')
+    await scanPosition('right')
+    
+    // Brief pause before analysis
+    console.log('⏳ Scan complete, preparing analysis...')
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    setCurrentStep('analyzing')
     setIsAnalyzing(true)
-    setScanComplete(false)
+    setAnalysisProgress(0)
+    console.log('🧠 Starting analysis...')
+    
+    // Simulate analysis progress
+    const progressInterval = setInterval(() => {
+      setAnalysisProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval)
+          return prev
+        }
+        return prev + 10
+      })
+    }, 200)
+    
+    await analyzeAllImages()
+    
+    clearInterval(progressInterval)
+    setAnalysisProgress(100)
+    setCurrentStep('analysis_complete')
+    setShowAnalysisComplete(true)
+    console.log('✅ Analysis complete!')
+    
+    // Show completion message for 2 seconds, then redirect
+    setTimeout(() => {
+      setCurrentStep('complete')
+      router.push('/dashboard')
+    }, 2000)
+  }
+
+  // Analyze images
+  const analyzeAllImages = async () => {
+    console.log('🔍 [ANALYSIS] Starting image analysis...')
+    const currentImages = capturedImagesRef.current
+    const totalImages = currentImages.center.length + currentImages.left.length + currentImages.right.length
+    
+    console.log(`📊 [ANALYSIS] Total images to analyze: ${totalImages}`)
+    console.log(`   - Center images: ${currentImages.center.length}`)
+    console.log(`   - Left images: ${currentImages.left.length}`)
+    console.log(`   - Right images: ${currentImages.right.length}`)
+    
+    if (totalImages === 0) {
+      console.error('❌ [ANALYSIS] No images captured')
+      throw new Error('No images captured - please try the scan again')
+    }
     
     try {
-      console.log('📤 [SCAN] Sending captured image to backend for analysis...')
-      clearError()
+      const token = localStorage.getItem('token')
+      console.log(`🔑 [ANALYSIS] Using token: ${token ? 'Present' : 'Missing'}`)
       
-      // Convert blob to file
-      const file = new File([imageBlob], 'face_capture.jpg', { type: 'image/jpeg' })
+      const formData = new FormData()
       
-      // Use the real skin analysis function
-      const result = await analyzeSkin(file)
-      console.log('✅ [SCAN] Real analysis successful:', result)
-      setAnalysisResult(result)
-      setScanComplete(true)
-    } catch (error) {
-      console.error('❌ [SCAN] Analysis failed:', error)
-      // Fallback to mock data
-      const mockResult: AnalysisResult = {
-        analysis_results: [{
-          face_id: 0,
-          conditions: [
-            { condition: "acne", confidence: 0.85, severity: "moderate" },
-            { condition: "dry_skin", confidence: 0.72, severity: "mild" },
-            { condition: "dark_spots", confidence: 0.68, severity: "mild" }
-          ]
-        }],
-        detected_conditions: ["acne", "dry_skin", "dark_spots"],
-        recommended_products: [
-          {
-            name: "Salicylic Acid Cleanser",
-            brand: "CeraVe",
-            price: 15.99,
-            rating: 4.5,
-            description: "Gentle cleanser for acne-prone skin",
-            image: "/facial-moisturizer-pump-bottle.jpg",
-            type: "cleanser",
-            personalized_score: 92
-          }
-        ],
-        skincare_routine: {
-          morning_routine: [
-            {
-              step: 1,
-              name: "Cleanse",
-              product: "Salicylic Acid Cleanser",
-              brand: "CeraVe",
-              duration: "1-2 minutes",
-              instructions: "Gently massage onto wet face, then rinse thoroughly"
-            }
-          ],
-          evening_routine: [],
-          total_products: 1,
-          estimated_cost: 15.99,
-          generated_at: new Date().toISOString()
-        },
-        analysis_timestamp: new Date().toISOString()
+      // Add center images to form data
+      console.log('📸 [ANALYSIS] Processing center images...')
+      for (let i = 0; i < currentImages.center.length; i++) {
+        console.log(`   - Processing center_${i}.jpg`)
+        const response = await fetch(currentImages.center[i])
+          const blob = await response.blob()
+        console.log(`   - Blob size: ${blob.size} bytes`)
+          if (blob.size > 0) {
+            formData.append('files', blob, `center_${i}.jpg`)
+          console.log(`   - Added center_${i}.jpg to form data`)
+          } else {
+          console.warn(`   - Skipped empty center_${i}.jpg`)
+        }
       }
-      setAnalysisResult(mockResult)
-      setScanComplete(true)
-    } finally {
-      setIsAnalyzing(false)
+      
+      // Add left images to form data
+      console.log('📸 [ANALYSIS] Processing left images...')
+      for (let i = 0; i < currentImages.left.length; i++) {
+        console.log(`   - Processing left_${i}.jpg`)
+        const response = await fetch(currentImages.left[i])
+          const blob = await response.blob()
+        console.log(`   - Blob size: ${blob.size} bytes`)
+          if (blob.size > 0) {
+            formData.append('files', blob, `left_${i}.jpg`)
+          console.log(`   - Added left_${i}.jpg to form data`)
+          } else {
+          console.warn(`   - Skipped empty left_${i}.jpg`)
+        }
+      }
+      
+      // Add right images to form data
+      console.log('📸 [ANALYSIS] Processing right images...')
+      for (let i = 0; i < currentImages.right.length; i++) {
+        console.log(`   - Processing right_${i}.jpg`)
+        const response = await fetch(currentImages.right[i])
+          const blob = await response.blob()
+        console.log(`   - Blob size: ${blob.size} bytes`)
+          if (blob.size > 0) {
+            formData.append('files', blob, `right_${i}.jpg`)
+          console.log(`   - Added right_${i}.jpg to form data`)
+          } else {
+          console.warn(`   - Skipped empty right_${i}.jpg`)
+        }
+      }
+      
+      console.log('🌐 [ANALYSIS] Sending request to backend...')
+      console.log(`   - Endpoint: ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/analyze-skin-multi-angle`)
+      console.log(`   - Method: POST`)
+      console.log(`   - Form data entries: ${Array.from(formData.entries()).length}`)
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/analyze-skin-multi-angle`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      })
+      
+      console.log(`📡 [ANALYSIS] Response received:`)
+      console.log(`   - Status: ${response.status}`)
+      console.log(`   - OK: ${response.ok}`)
+      console.log(`   - Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
+      
+      if (response.ok) {
+        console.log('✅ [ANALYSIS] Analysis successful, parsing results...')
+      const result = await response.json()
+        console.log('📊 [ANALYSIS] Analysis results:', result)
+      
+        localStorage.setItem('skinAnalysis', JSON.stringify(result))
+        console.log('💾 [ANALYSIS] Results saved to localStorage')
+        
+        setCurrentStep('complete')
+        setAnalysisResults(result)
+        console.log('🎉 [ANALYSIS] Analysis complete!')
+      } else {
+        const errorText = await response.text()
+        console.error(`❌ [ANALYSIS] Analysis failed with status ${response.status}`)
+        console.error(`   - Error response: ${errorText}`)
+        throw new Error(`Analysis failed: ${response.status} - ${errorText}`)
+      }
+    } catch (error: any) {
+      console.error('💥 [ANALYSIS] Analysis error:', error)
+      // Show error in console and reset - dashboard will handle display
+      console.error('Analysis failed:', error.message || error)
+      setCurrentStep('ready')
+      setCapturedImages({ center: [], left: [], right: [] })
+      setProgress(0)
+      // Store error for dashboard to display
+      const errorResult = {
+        success: false,
+        error: error.message || "Analysis failed. Please try again."
+      }
+      localStorage.setItem('skinAnalysis', JSON.stringify(errorResult))
     }
   }
 
-  const handleImageUpload = async (file: File) => {
-    setIsAnalyzing(true)
-    setScanComplete(false)
+  // Skip scan
+  const handleSkip = async () => {
+    stopCamera()
     
     try {
-      console.log('📤 [SCAN] Sending uploaded image to backend for analysis...')
-      clearError()
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/generate-profile-recommendations`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
       
-      // Use the real skin analysis function
-      const result = await analyzeSkin(file)
-      console.log('✅ [SCAN] Real analysis successful:', result)
-      setAnalysisResult(result)
-      setScanComplete(true)
-    } catch (error) {
-      console.error('❌ [SCAN] Analysis failed:', error)
-      // Fallback to mock data
-      const mockResult: AnalysisResult = {
-        analysis_results: [{
-          face_id: 0,
-          conditions: [
-            { condition: "acne", confidence: 0.75, severity: "moderate" },
-            { condition: "dry_skin", confidence: 0.65, severity: "mild" },
-            { condition: "dark_spots", confidence: 0.45, severity: "low" }
-          ]
-        }],
-        detected_conditions: ["acne", "dry_skin", "dark_spots"],
-        recommended_products: [
-          {
-            name: "Test Cleanser",
-            brand: "Test Brand",
-            price: 19.99,
-            rating: 4.0,
-            description: "Test product for demo",
-            image: "/facial-moisturizer-pump-bottle.jpg",
-            type: "cleanser",
-            personalized_score: 85
-          }
-        ],
-        skincare_routine: {
-          morning_routine: [
+      if (response.ok) {
+        const result = await response.json()
+        localStorage.setItem('skinAnalysis', JSON.stringify(result))
+        router.push('/dashboard')
+      } else {
+        // Fallback
+        const fallbackAnalysis = {
+          success: true,
+          analysis_type: 'profile_based',
+          detected_conditions: ['general_care'],
+          recommended_products: [
             {
-              step: 1,
-              name: "Cleanse",
-              product: "Test Cleanser",
-              brand: "Test Brand",
-              duration: "1-2 minutes",
-              instructions: "Gently massage onto wet face, then rinse thoroughly"
+              name: "Gentle Daily Cleanser",
+              category: "Cleanser",
+              price: "15.99",
+              description: "Recommended for all skin types"
             }
           ],
-          evening_routine: [],
-          total_products: 1,
-          estimated_cost: 19.99,
-          generated_at: new Date().toISOString()
-        },
-        analysis_timestamp: new Date().toISOString()
+          skincare_routine: "Morning: Gentle cleanser → Moisturizer\nEvening: Gentle cleanser",
+          ai_report: "Based on your profile, here are general skincare recommendations.",
+          skin_health_score: 0.7,
+          analysis_timestamp: new Date().toISOString()
+        }
+        
+        localStorage.setItem('skinAnalysis', JSON.stringify(fallbackAnalysis))
+        router.push('/dashboard')
       }
-      setAnalysisResult(mockResult)
-      setScanComplete(true)
-    } finally {
-      setIsAnalyzing(false)
+    } catch (error) {
+      console.error('Profile analysis error:', error)
+      router.push('/dashboard')
     }
   }
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  // Restart scan
+  const restartScan = () => {
+    setCapturedImages({ center: [], left: [], right: [] })
+    setCurrentStep('ready')
+    setProgress(0)
+    startCamera()
+  }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
-      return
+  // Get instruction text
+  const getInstructionText = () => {
+    switch (currentStep) {
+      case 'center':
+        return '👀 Look straight at the camera - Keep your face centered'
+      case 'left':
+        return '👈 Turn your head to the LEFT - Show your left profile'
+      case 'right':
+        return '👉 Turn your head to the RIGHT - Show your right profile'
+      case 'analyzing':
+        return '🔍 Analyzing your skin...'
+      case 'analysis_complete':
+        return '✅ Analysis complete! Redirecting to dashboard...'
+      case 'complete':
+        return '✅ Analysis complete! Ready to process with your profile'
+      default:
+        return 'Ready to start'
     }
+  }
 
-    // Validate file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB')
-      return
+  // Get step icon
+  const getStepIcon = () => {
+    switch (currentStep) {
+      case 'center':
+      case 'left':
+      case 'right':
+        return <Video className="w-8 h-8 text-green-500" />
+      case 'analyzing':
+        return <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+      case 'analysis_complete':
+        return <CheckCircle2 className="w-8 h-8 text-green-500 animate-pulse" />
+      case 'complete':
+        return <Sparkles className="w-8 h-8 text-yellow-500" />
+      default:
+        return <Camera className="w-8 h-8 text-gray-500" />
     }
-
-    setIsAnalyzing(true)
-    await handleAnalysisComplete(file)
   }
 
-  const handleRetry = () => {
-    setScanComplete(false)
-    setIsAnalyzing(false)
-    setShowInstructions(true)
-    setAnalysisResult(null)
-    setUploadMode(false)
-    clearError()
-  }
-
-  const handleContinue = () => {
-    // Navigate to dashboard to see recommendations
-    router.push("/dashboard")
-  }
-
-  const toggleUploadMode = () => {
-    setUploadMode(!uploadMode)
-    clearError()
-  }
-
-  if (showInstructions) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full space-y-8">
-          {/* Header */}
-          <div className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center">
-                <Camera className="w-8 h-8 text-primary-foreground" />
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold text-foreground">Face Scan Setup</h1>
-            <p className="text-muted-foreground">
-              Follow these instructions for the best scan results
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-500" />
-                Important Instructions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">1</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Good Lighting</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Ensure you're in a well-lit area with even lighting on your face
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">2</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Remove Glasses</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Take off glasses, sunglasses, or any eyewear for maximum accuracy
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">3</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Clear Face</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Remove hats, masks, or any accessories that cover your face
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-xs font-semibold text-primary">4</span>
-                  </div>
-                  <div>
-                    <h4 className="font-semibold">Follow Instructions</h4>
-                    <p className="text-sm text-muted-foreground">
-                      The scan will guide you to look left, right, and center
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Upload Option */}
-          {uploadMode && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Upload Image
-                </CardTitle>
-                <CardDescription>
-                  Upload a clear photo of your face for analysis
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {error && (
-                  <Alert className="mb-4" variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-                
-                <div className="space-y-4">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading}
-                    className="w-full"
-                    variant="outline"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Choose Image File
-                      </>
-                    )}
-                  </Button>
-                  
-                  <p className="text-xs text-muted-foreground text-center">
-                    Supported formats: JPG, PNG, JPEG (max 10MB)
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              variant="outline"
-              onClick={() => router.back()}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </Button>
-            
-            {!uploadMode ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={toggleUploadMode}
-                  className="flex items-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload Image
-                </Button>
-                <Button
-                  onClick={handleStartScan}
-                  className="flex items-center gap-2 flex-1"
-                >
-                  <Camera className="w-4 h-4" />
-                  Start Face Scan
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={toggleUploadMode}
-                className="flex items-center gap-2 flex-1"
-              >
-                <Camera className="w-4 h-4" />
-                Use Camera Instead
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (scanComplete) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="max-w-2xl w-full space-y-8">
-          {/* Success Header */}
-          <div className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-white" />
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold text-foreground">Scan Complete!</h1>
-            <p className="text-muted-foreground">
-              Your face has been successfully analyzed
-            </p>
-          </div>
-
-          {/* Results Preview */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Analysis Results</CardTitle>
-              <CardDescription>
-                Your skin analysis is ready
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Face Detection</span>
-                  <span className="text-sm text-green-600">✓ Successful</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Image Quality</span>
-                  <span className="text-sm text-green-600">✓ High</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Analysis Status</span>
-                  <span className="text-sm text-green-600">✓ Complete</span>
-                </div>
-                
-                {analysisResult && (
-                  <>
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-2">Detected Conditions:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {analysisResult.detected_conditions.map((condition, index) => (
-                          <span
-                            key={index}
-                            className="px-2 py-1 bg-primary/10 text-primary rounded-md text-sm"
-                          >
-                            {condition.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {analysisResult.recommended_products.length > 0 && (
-                      <div className="border-t pt-4">
-                        <h4 className="font-semibold mb-2">Recommended Products:</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {analysisResult.recommended_products.length} products found
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              variant="outline"
-              onClick={handleRetry}
-              className="flex items-center gap-2"
-            >
-              <Camera className="w-4 h-4" />
-              Scan Again
-            </Button>
-            <Button
-              onClick={handleContinue}
-              className="flex items-center gap-2 flex-1"
-            >
-              <CheckCircle className="w-4 h-4" />
-              View Results
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
+  if (!cameraMounted) {
+    return null
   }
 
   return (
-    <div className="min-h-screen bg-black relative">
-      {/* Back Button */}
-      <div className="absolute top-4 left-4 z-10">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowInstructions(true)}
-          className="bg-black/50 border-white/20 text-white hover:bg-white/10"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-white via-green-50 to-green-100 p-4">
+      <div className="max-w-4xl mx-auto py-8">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg mb-4">
+            {getStepIcon()}
+          </div>
+          
+          <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-green-600 to-green-800 bg-clip-text text-transparent">
+            {currentStep === 'ready' ? 'Multi-Angle Face Scan' : 'Scanning Your Face'}
+          </h1>
+          
+          <p className="text-lg text-gray-600 mb-6">
+            {getInstructionText()}
+          </p>
+        </div>
 
-      {/* Face Capture Interface */}
-      <div className="w-full h-screen flex items-center justify-center p-4">
-        <FaceCapture
-          onImageCapture={handleImageCapture}
-          onImageUpload={handleImageUpload}
-          isProcessing={isAnalyzing}
-        />
+        {/* Main Card */}
+        <Card className="bg-white/90 backdrop-blur-sm border-2 border-green-100 shadow-2xl">
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Camera Area */}
+              <div className="lg:col-span-2">
+              <div className="relative rounded-xl overflow-hidden border-3 border-green-300 bg-black shadow-xl w-full aspect-video flex items-center justify-center">
+                {isCameraActive ? (
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                      style={{ transform: 'scaleX(-1)' }}
+                      />
+                      
+                      {/* Face Overlay */}
+                      <div className="absolute inset-0 pointer-events-none">
+                        {/* Face outline overlay */}
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                          <div className="relative">
+                            {/* Face oval */}
+                            <div className="w-48 h-64 border-4 border-green-400 rounded-full opacity-80 animate-pulse"></div>
+                            
+                            {/* Position indicators */}
+                            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                              <div className="w-3 h-3 bg-green-400 rounded-full animate-bounce"></div>
+                            </div>
+                            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2">
+                              <div className="w-3 h-3 bg-green-400 rounded-full animate-bounce"></div>
+                            </div>
+                            <div className="absolute top-1/2 -left-2 transform -translate-y-1/2">
+                              <div className="w-3 h-3 bg-green-400 rounded-full animate-bounce"></div>
+                            </div>
+                            <div className="absolute top-1/2 -right-2 transform -translate-y-1/2">
+                              <div className="w-3 h-3 bg-green-400 rounded-full animate-bounce"></div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Step-specific positioning guides */}
+                        {currentStep === 'center' && (
+                          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                            Look straight at the camera
+                          </div>
+                        )}
+                        {currentStep === 'left' && (
+                          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                            Turn your head to the left
+                          </div>
+                        )}
+                        {currentStep === 'right' && (
+                          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-full text-sm font-semibold">
+                            Turn your head to the right
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Countdown */}
+                      {countdown && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                          <div className="text-6xl font-bold text-white">
+                            {countdown}
+                        </div>
+                      </div>
+                    )}
+                    
+                      {/* Progress */}
+                      {progress > 0 && (
+                        <div className="absolute bottom-4 left-4 right-4">
+                          <div className="bg-white/90 rounded-full h-2">
+                            <div 
+                              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${progress}%` }}
+                            />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center p-8">
+                    <Video className="w-24 h-24 text-white/50 mx-auto mb-4" />
+                    <p className="text-white text-lg">Click "Start Scan" to begin</p>
+                  </div>
+                )}
+              </div>
+                  </div>
+
+              {/* Controls */}
+              <div className="lg:col-span-1 space-y-4">
+                {!isCameraActive && currentStep === 'ready' && (
+                  <>
+                    <Button 
+                      onClick={async () => {
+                        console.log('🎬 Starting camera and scan...')
+                        await startCamera()
+                        // Scanning will auto-start when video is ready
+                      }}
+                      className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold h-14 text-base"
+                    >
+                      <Video className="w-5 h-5 mr-2" />
+                      Start 3-Angle Scan
+                    </Button>
+                    
+                    <Button 
+                      onClick={handleSkip}
+                      variant="outline"
+                      className="w-full border-2 border-green-600 text-green-600 hover:bg-green-50 font-semibold h-14 text-base"
+                    >
+                      Skip for Now
+                      <ArrowRight className="w-5 h-5 ml-2" />
+                    </Button>
+                  </>
+                )}
+                
+                {isCameraActive && (currentStep === 'center' || currentStep === 'left' || currentStep === 'right') && (
+                    <Button 
+                      onClick={stopCamera}
+                      variant="outline"
+                      className="w-full border-2 border-red-500 text-red-500 hover:bg-red-50 font-semibold h-12 text-base"
+                    >
+                      <VideoOff className="w-5 h-5 mr-2" />
+                      Stop Scan
+                    </Button>
+                )}
+                
+                {currentStep === 'analyzing' && (
+                  <div className="text-center space-y-4">
+                    <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto" />
+                    <p className="text-lg font-semibold text-gray-700">Analyzing your skin...</p>
+                    <p className="text-sm text-gray-500">This may take a few moments</p>
+                    
+                    {/* Analysis Progress Bar */}
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div 
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-3 rounded-full transition-all duration-300"
+                        style={{ width: `${analysisProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">{analysisProgress}% complete</p>
+                  </div>
+                )}
+                
+                {currentStep === 'analysis_complete' && showAnalysisComplete && (
+                  <div className="text-center space-y-4">
+                    <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto animate-pulse" />
+                    <p className="text-xl font-bold text-green-600">Analysis Complete!</p>
+                    <p className="text-sm text-gray-500">Redirecting to dashboard...</p>
+                  </div>
+                )}
+                
+                {currentStep === 'complete' && (
+                    <Button 
+                      onClick={() => {
+                      handleSkip()
+                      }}
+                      className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white font-bold h-14 text-base"
+                    >
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Process with My Profile
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bottom Accent */}
+        <div className="mt-8 text-center">
+          <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="w-16 h-0.5 bg-gradient-to-r from-transparent to-green-300"></div>
+            <span className="font-medium">Powered by AI • Professional-grade scanning</span>
+            <div className="w-16 h-0.5 bg-gradient-to-l from-transparent to-green-300"></div>
+          </div>
+        </div>
       </div>
+      
+      {/* Hidden canvas for capture */}
+      <canvas ref={canvasRef} className="hidden" />
     </div>
   )
 }

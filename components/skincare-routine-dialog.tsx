@@ -139,6 +139,10 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
     generated_at: new Date().toISOString()
   }
 
+  // Ensure morning_routine and evening_routine are arrays
+  const safeMorningRoutine = Array.isArray(routineData.morning_routine) ? routineData.morning_routine : morningRoutine
+  const safeEveningRoutine = Array.isArray(routineData.evening_routine) ? routineData.evening_routine : eveningRoutine
+
   const detectedConditions = analysisData?.detected_conditions || ["Combination Skin", "Mild Acne", "Sensitive", "Dehydrated"]
   const recommendedProducts = analysisData?.recommended_products || []
 
@@ -168,7 +172,7 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
             </div>
             <p className="text-sm text-muted-foreground mt-3">
               Your routine focuses on addressing {detectedConditions.length > 0 ? detectedConditions.join(', ') : 'your skin concerns'} 
-              with {routineData.total_products} recommended products (estimated cost: ${routineData.estimated_cost.toFixed(2)}).
+              with {routineData.total_products} recommended products (estimated cost: ${(routineData.estimated_cost || 0).toFixed(2)}).
             </p>
           </div>
 
@@ -183,7 +187,7 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
               </Badge>
             </div>
             <div className="space-y-4">
-              {routineData.morning_routine.map((item) => {
+              {safeMorningRoutine.map((item) => {
                 const Icon = item.icon || Droplets
                 return (
                   <div
@@ -227,7 +231,7 @@ export function SkincareRoutineDialog({ open, onOpenChange }: SkincareRoutineDia
               </Badge>
             </div>
             <div className="space-y-4">
-              {routineData.evening_routine.map((item) => {
+              {safeEveningRoutine.map((item) => {
                 const Icon = item.icon || Moon
                 return (
                   <div

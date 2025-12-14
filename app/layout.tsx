@@ -1,21 +1,21 @@
 import type { Metadata } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
-import { UserProvider } from "@/contexts/user-context"
+import { UserProvider } from "@/contexts/user-context-simple"
 
 const inter = Inter({
-  variable: "--font-inter",
+  variable: "--font-geist-sans",
   subsets: ["latin"],
 })
 
 const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+  variable: "--font-geist-mono",
   subsets: ["latin"],
 })
 
 export const metadata: Metadata = {
-  title: "SkinCare AI - Personalized Skincare Recommendations",
-  description: "Discover personalized skincare products tailored to your skin's needs with AI-powered analysis",
+  title: "Dermalens - AI Skin Analysis",
+  description: "Get personalized skincare recommendations powered by AI",
 }
 
 export default function RootLayout({
@@ -35,4 +35,3 @@ export default function RootLayout({
     </html>
   )
 }
-

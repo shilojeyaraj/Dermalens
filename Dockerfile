@@ -1,55 +1,38 @@
-# 🔬 Dermalens Frontend Dockerfile
-# Multi-stage build for production optimization
-
-# Stage 1: Build stage
-FROM node:18-alpine as builder
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Copy source code
-COPY . .
-
-# Build application
-RUN npm run build
-
-# Stage 2: Production stage
 FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    curl \
-    && rm -rf /var/cache/apk/*
+# Install dependencies for building
+RUN apk add --no-cache libc6-compat
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+# Copy package files
+COPY package.json package-lock.json ./
 
-# Copy built application from builder stage
-COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./
+# Install dependencies
+RUN npm ci
 
-# Switch to non-root user
-USER nextjs
+# Copy source code
+COPY . .
+
+# Ensure lib directory exists and create files
+RUN mkdir -p lib
+RUN echo 'export function cn(...classes) { return classes.filter(Boolean).join(" "); }' > lib/utils.ts
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_API_URL=https://dermalens-backend-941238576063.us-central1.run.app
+
+# Build the application
+RUN npm run build
 
 # Expose port
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000 || exit 1
+# Set hostname
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=3000
 
-# Start application
+# Start the application
 CMD ["npm", "start"]

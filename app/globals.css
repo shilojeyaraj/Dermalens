@@ -2,51 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 220 13% 18%;
-  --card: 120 25% 95%;
-  --card-foreground: 220 13% 18%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 13% 18%;
-  --primary: 142 76% 36%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 84 81% 44%;
-  --secondary-foreground: 220 13% 18%;
-  --muted: 120 25% 95%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 84 81% 44%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 220 13% 91%;
-  --input: 0 0% 100%;
-  --ring: 172 66% 50%;
-  --radius: 0.5rem;
-}
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
 
-.dark {
-  --background: 220 13% 18%;
-  --foreground: 210 20% 98%;
-  --card: 220 13% 9%;
-  --card-foreground: 210 20% 98%;
-  --popover: 220 13% 18%;
-  --popover-foreground: 210 20% 98%;
-  --primary: 142 76% 36%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 84 81% 44%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 220 13% 18%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 84 81% 44%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 220 13% 18%;
-  --input: 220 13% 18%;
-  --ring: 142 76% 36%;
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
 }
-
 
 @layer base {
   * {
@@ -57,66 +58,193 @@
   }
 }
 
-@layer utilities {
-  .animate-fade-in {
-    animation: fadeIn 0.5s ease-in-out;
+/* Face Scan Avatar Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
   }
-  
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  /* Scanning animations */
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 0.3;
-      transform: scaleY(0.5);
-    }
-    50% {
-      opacity: 1;
-      transform: scaleY(1);
-    }
-  }
-
-  @keyframes scanGlow {
-    0%, 100% {
-      filter: drop-shadow(0 0 5px var(--accent));
-    }
-    50% {
-      filter: drop-shadow(0 0 20px var(--accent)) drop-shadow(0 0 30px var(--accent));
-    }
-  }
-
-  @keyframes scanMove {
-    0% {
-      transform: translateY(-10px);
-    }
-    100% {
-      transform: translateY(10px);
-    }
-  }
-
-  .animate-scan-glow {
-    animation: scanGlow 2s ease-in-out infinite;
-  }
-
-  .animate-scan-move {
-    animation: scanMove 3s ease-in-out infinite alternate;
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-/* Ensure Radix UI Select dropdowns are visible */
-[data-radix-select-content] {
-  z-index: 9999 !important;
+@keyframes scan-line {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
-[data-radix-popper-content-wrapper] {
-  z-index: 9999 !important;
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+  }
+}
+
+@keyframes issue-point-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes issue-point-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+.animate-scan-line {
+  animation: scan-line 2s ease-in-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-issue-point-appear {
+  animation: issue-point-appear 0.6s ease-out forwards;
+}
+
+.animate-issue-point-pulse {
+  animation: issue-point-pulse 2s ease-in-out infinite;
+}
+
+/* Enhanced scan line effect */
+.scan-line {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(59, 130, 246, 0.8),
+    transparent
+  );
+  animation: scan-sweep 2s ease-in-out;
+}
+
+@keyframes scan-sweep {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Issue point styles */
+.issue-point {
+  position: relative;
+  z-index: 10;
+}
+
+.issue-point::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: inherit;
+  transform: translate(-50%, -50%);
+  animation: issue-ripple 2s ease-out infinite;
+}
+
+@keyframes issue-ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* Severity-based colors */
+.severity-severe {
+  background-color: rgba(220, 38, 38, 0.8);
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.6);
+}
+
+.severity-moderate {
+  background-color: rgba(245, 158, 11, 0.8);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+}
+
+.severity-mild {
+  background-color: rgba(34, 197, 94, 0.8);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+}
+
+/* Scan progress indicator */
+.scan-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(59, 130, 246, 0.3),
+    transparent
+  );
+  animation: progress-sweep 2s ease-in-out infinite;
+}
+
+@keyframes progress-sweep {
+  0% {
+    left: -100%;
+    width: 100%;
+  }
+  100% {
+    left: 100%;
+    width: 100%;
+  }
 }

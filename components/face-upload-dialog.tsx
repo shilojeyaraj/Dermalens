@@ -15,7 +15,7 @@ interface FaceUploadDialogProps {
 
 export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -37,7 +37,7 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
       URL.revokeObjectURL(previewUrl)
     }
     setSelectedFile(null)
-    setPreviewUrl(null)
+    setPreviewUrl(undefined)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -114,7 +114,7 @@ export function FaceUploadDialog({ open, onOpenChange }: FaceUploadDialogProps) 
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const response = await fetch('http://localhost:8000/analyze-skin', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/analyze-skin`, {
         method: 'POST',
         body: formData,
       })

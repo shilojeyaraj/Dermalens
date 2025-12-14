@@ -23,15 +23,15 @@ type ProductFiltersProps = {
 export function ProductFilters({ products, onFilterChange }: ProductFiltersProps) {
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 50])
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 150])
   const [searchQuery, setSearchQuery] = useState("")
 
   // Extract unique brands and types from products
   const brands = Array.from(new Set(products.map((p) => p.brand))).sort()
   const types = Array.from(new Set(products.map((p) => p.type))).sort()
 
-  // Get max price from products
-  const maxPrice = Math.max(...products.map((p) => p.price))
+  // Set max price to $150
+  const maxPrice = 150
 
   useEffect(() => {
     onFilterChange({
@@ -66,23 +66,6 @@ export function ProductFilters({ products, onFilterChange }: ProductFiltersProps
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Search</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Clear Filters */}
       {hasActiveFilters && (
@@ -128,8 +111,8 @@ export function ProductFilters({ products, onFilterChange }: ProductFiltersProps
             className="w-full"
           />
           <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>${priceRange[0].toFixed(2)}</span>
-            <span>${priceRange[1].toFixed(2)}</span>
+            <span>${(priceRange[0] || 0).toFixed(2)}</span>
+            <span>${(priceRange[1] || 0).toFixed(2)}</span>
           </div>
         </CardContent>
       </Card>

@@ -4,31 +4,18 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Sparkles, Scan, Package, GraduationCap } from "lucide-react"
 import { ProductsPage } from "@/components/products-page"
-import { useUser } from "@/contexts/user-context"
+import { useUser } from "@/contexts/user-context-simple"
 
 export function LandingPage() {
   const { user } = useUser()
 
   return (
-    <div className="min-h-screen bg-background">
-      <section className="relative overflow-hidden bg-background">
-        {/* Three Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] min-h-[600px]">
-          {/* Left Image */}
-          <div className="hidden lg:block relative overflow-hidden bg-gradient-to-br from-green-100 to-green-200">
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center text-green-600">
-                <div className="w-32 h-32 rounded-full bg-green-300 mx-auto mb-4 flex items-center justify-center">
-                  <span className="text-4xl">👤</span>
-                </div>
-                <p className="text-sm font-medium">Profile Image</p>
-              </div>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-background" />
-          </div>
-
+    <div className="min-h-screen bg-gradient-to-br from-green-100 via-green-50 to-white relative overflow-hidden">
+      <section className="relative overflow-hidden">
+        {/* Single Column Layout */}
+        <div className="min-h-[500px]">
           {/* Center Content - Clean Background */}
-          <div className="flex items-center justify-center px-4 py-20 bg-background">
+          <div className="flex items-center justify-center px-4 py-16 bg-gradient-to-b from-green-50/80 via-white/50 to-green-50/80 backdrop-blur-sm">
             <div className="max-w-2xl mx-auto text-center space-y-8">
               {/* Logo/Brand */}
               <div className="flex justify-center mb-6">
@@ -51,7 +38,7 @@ export function LandingPage() {
       <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
         <Button
           size="lg"
-          className="w-full sm:w-auto min-w-[140px] text-base font-semibold shadow-lg"
+          className="w-full sm:w-auto min-w-[140px] text-base font-semibold shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600"
           onClick={() => window.location.href = '/signup'}
         >
           Sign Up
@@ -59,7 +46,7 @@ export function LandingPage() {
         <Button
           size="lg"
           variant="outline"
-          className="w-full sm:w-auto min-w-[140px] text-base font-semibold bg-transparent"
+          className="w-full sm:w-auto min-w-[140px] text-base font-semibold bg-white/80 backdrop-blur-sm border-2 border-green-600 text-green-600 hover:bg-green-50 transition-all duration-300"
           onClick={() => window.location.href = '/login'}
         >
           Log In
@@ -67,27 +54,14 @@ export function LandingPage() {
       </div>
             </div>
           </div>
-
-          {/* Right Image */}
-          <div className="hidden lg:block relative overflow-hidden bg-gradient-to-br from-green-100 to-green-200">
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center text-green-600">
-                <div className="w-32 h-32 rounded-full bg-green-300 mx-auto mb-4 flex items-center justify-center">
-                  <span className="text-4xl">👤</span>
-                </div>
-                <p className="text-sm font-medium">Profile Image</p>
-              </div>
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-l from-transparent to-background" />
-          </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="container mx-auto px-4 py-16 md:py-20">
+      <section className="container mx-auto px-4 py-8 md:py-12">
         <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {/* AI Analysis Card */}
-          <div className="bg-accent/30 rounded-xl p-8 space-y-4 border border-border/50 hover:border-primary/50 transition-colors">
+          <div className="bg-gradient-to-br from-green-100 to-white rounded-xl p-8 space-y-4 border border-green-200 hover:border-green-400 hover:shadow-lg transition-all duration-300">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
               <Scan className="w-6 h-6 text-primary" />
             </div>
@@ -103,7 +77,7 @@ export function LandingPage() {
           </div>
 
           {/* Personalized Products Card */}
-          <div className="bg-accent/30 rounded-xl p-8 space-y-4 border border-border/50 hover:border-primary/50 transition-colors">
+          <div className="bg-gradient-to-br from-white to-green-100 rounded-xl p-8 space-y-4 border border-green-200 hover:border-green-400 hover:shadow-lg transition-all duration-300">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
               <Package className="w-6 h-6 text-primary" />
             </div>
@@ -119,7 +93,7 @@ export function LandingPage() {
           </div>
 
           {/* Expert Guidance Card */}
-          <div className="bg-accent/30 rounded-xl p-8 space-y-4 border border-border/50 hover:border-primary/50 transition-colors">
+          <div className="bg-gradient-to-br from-green-100 via-white to-green-100 rounded-xl p-8 space-y-4 border border-green-200 hover:border-green-400 hover:shadow-lg transition-all duration-300">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
               <GraduationCap className="w-6 h-6 text-primary" />
             </div>

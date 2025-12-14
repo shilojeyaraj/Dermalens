@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        video { width: 400px; height: 300px; border: 2px solid #ccc; }
+        button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .error { color: red; margin: 10px 0; }
+        .success { color: green; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Camera Test</h1>
+    <div id="status">Click "Start Camera" to test</div>
+    <video id="video" autoplay muted playsinline></video>
+    <br>
+    <button onclick="startCamera()">Start Camera</button>
+    <button onclick="stopCamera()">Stop Camera</button>
+    
+    <script>
+        let stream = null;
+        
+        async function startCamera() {
+            const status = document.getElementById('status');
+            const video = document.getElementById('video');
+            
+            try {
+                status.innerHTML = 'Requesting camera access...';
+                
+                // Check if getUserMedia is supported
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia is not supported in this browser');
+                }
+                
+                // Request camera access
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                
+                // Set video source
+                video.srcObject = stream;
+                
+                status.innerHTML = '<div class="success">✅ Camera started successfully!</div>';
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                let errorMessage = 'Camera access failed: ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Permission denied. Please allow camera access and refresh the page.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No camera found. Please connect a camera.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage += 'Camera not supported. Please use HTTPS or localhost.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage += 'Camera is being used by another application.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                status.innerHTML = `<div class="error">❌ ${errorMessage}</div>`;
+            }
+        }
+        
+        function stopCamera() {
+            const status = document.getElementById('status');
+            const video = document.getElementById('video');
+            
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                video.srcObject = null;
+                status.innerHTML = 'Camera stopped';
+            }
+        }
+        
+        // Auto-start camera on page load
+        window.addEventListener('load', () => {
+            console.log('Page loaded, testing camera...');
+            startCamera();
+        });
+    </script>
+</body>
+</html>
