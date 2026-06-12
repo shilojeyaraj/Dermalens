@@ -10,39 +10,59 @@
 
 ---
 
+## ⚠️ Plan Correction (2026-06-11, after repo investigation)
+
+The original assumption ("`apps/` is fully abandoned, `backend/` is canonical") was **wrong for the backend**. Verified facts:
+- **`apps/api` is the LIVE deployed backend** (`cloudbuild.yaml` builds `./apps/api` → Cloud Run `dermalens-backend`; `vercel.json` rewrites `/api/*` to it). Deps: `apps/api/requirements.txt` (20 pkgs, no torch).
+- **`backend/`** is an older non-deployed duplicate. The torch-heavy **root `requirements.txt`** belongs to it.
+- **`apps/web`** and **`packages/`** are confirmed dead (imported/referenced by nothing).
+
+**User decision:** Keep `apps/api`; **archive** `backend/` (+ root `requirements.txt`) into `docs/archive/legacy-backend/`; delete `apps/web` + `packages/`. Backend tests/CI/docs target **`apps/api`**; dev tooling goes in a new root **`requirements-dev.txt`**.
+
+Tasks below are updated to reflect this. Where a task still says `backend/`, read `apps/api`.
+
+---
+
 ## Phase A — Cleanup
 
-### Task 1: Remove cruft and declutter root
+### Task 1: Remove cruft, archive legacy backend, declutter root
 
 **Files:**
-- Delete (git rm): `Redis-x64-3.0.504.msi`, `et --hard HEAD`, `tatus`, `temp_scan_page.tsx`, `apps/` (recursive), `packages/` (recursive), `backend/main.modified.bak`, `Dockerfile.production`, `Dockerfile.simple`, `Dockerfile.working`, `next.config.simple.js`
-- Move into `docs/archive/`: scattered root marketing/status markdown
+- Delete (git rm): `Redis-x64-3.0.504.msi`, `et --hard HEAD`, `tatus`, `temp_scan_page.tsx`, `apps/web/` (recursive), `packages/` (recursive), `Dockerfile.production`, `Dockerfile.simple`, `Dockerfile.working`, `next.config.simple.js`, stray junk (`variables.txt`, `simple_app.py`, `camera-test.html`) after ref-check
+- Archive (git mv): `backend/` → `docs/archive/legacy-backend/backend/`, root `requirements.txt` → `docs/archive/legacy-backend/requirements.txt`
+- Move (git mv) scattered root markdown → `docs/archive/`
+- **Keep untouched:** `apps/api/` (live backend), root frontend, `cloudbuild.yaml`, `vercel.json`
 
-- [ ] **Step 1: Verify nothing references the duplicate Dockerfiles / next.config.simple.js**
+- [ ] **Step 1: (done during planning)** Verified: no live config/script references the dup Dockerfiles, `next.config.simple.js`, `apps/web`, or `packages/`; `apps/api` is referenced by `cloudbuild.yaml`.
 
-Run: `grep -rniE "Dockerfile\.(production|simple|working)|next\.config\.simple" --include=*.yml --include=*.yaml --include=*.json --include=*.sh --include=*.ps1 --include=*.md . | grep -v node_modules`
-Expected: only self-references or none. If a deploy script references one, keep that file or update the script.
-
-- [ ] **Step 2: Confirm apps/ and packages/ are not wired into workspace tooling**
-
-Run: `grep -rn "workspaces\|apps/\|packages/" package.json next.config.js tsconfig.json vercel.json`
-Expected: no workspace config; safe to delete.
-
-- [ ] **Step 3: git rm the junk + abandoned monorepo + dup Dockerfiles**
+- [ ] **Step 2: git rm junk + dead duplicates + dup Dockerfiles** (note: `apps/api` is preserved)
 
 ```bash
-git rm -r --quiet "Redis-x64-3.0.504.msi" "et --hard HEAD" "tatus" "temp_scan_page.tsx" apps packages backend/main.modified.bak Dockerfile.production Dockerfile.simple Dockerfile.working next.config.simple.js
+git rm -r --quiet "Redis-x64-3.0.504.msi" "et --hard HEAD" "tatus" "temp_scan_page.tsx" \
+  apps/web packages Dockerfile.production Dockerfile.simple Dockerfile.working next.config.simple.js
 ```
 
-- [ ] **Step 4: Move scattered root markdown into docs/archive/**
-
-Move these into `docs/archive/` (keep history with `git mv`): `HACKATHON_SUBMISSION.md`, `LINKEDIN_POST.md`, `LINKEDIN_POST_HACKATHON.md`, `PROFILE_AND_PRODUCTS_FIXES.md`, `PRODUCT_FILTERS_VERIFICATION.md`, `PRODUCTION_READINESS_CHECKLIST.md`, `DEPLOYMENT_CHECKLIST.md`, `GOOGLE_CLOUD_DEPLOYMENT.md`, `PRODUCTION_DEPLOYMENT_GUIDE.md`, `VERCEL_DEPLOYMENT.md`, `SUPABASE_KEEPALIVE_SETUP.md`, `INSTRUCTIONS.md`, `deploy-vercel.md`, `PORTFOLIO_PROJECT_DESCRIPTION.md`, `repo_professionalism_prompt.md`. Also remove stray non-md junk if tracked: `variables.txt`, `tatus`, `simple_app.py`, `camera-test.html` (verify references first).
-Keep at root: `README.md` (only doc kept until CONTRIBUTING/CHANGELOG/etc. are added).
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Archive legacy backend + its requirements** (preserve, don't delete)
 
 ```bash
-git add -A && git commit -m "chore: remove cruft and abandoned monorepo, declutter root"
+mkdir -p docs/archive/legacy-backend
+git mv backend docs/archive/legacy-backend/backend
+git mv requirements.txt docs/archive/legacy-backend/requirements.txt
+```
+
+- [ ] **Step 4: Ref-check then remove stray non-md junk**
+
+For each of `variables.txt`, `simple_app.py`, `camera-test.html`: confirm no live reference (`grep -rn name`), then `git rm`. If referenced, leave it.
+
+- [ ] **Step 5: Move scattered root markdown into docs/archive/**
+
+`git mv` into `docs/archive/`: `HACKATHON_SUBMISSION.md`, `LINKEDIN_POST.md`, `LINKEDIN_POST_HACKATHON.md`, `PROFILE_AND_PRODUCTS_FIXES.md`, `PRODUCT_FILTERS_VERIFICATION.md`, `PRODUCTION_READINESS_CHECKLIST.md`, `DEPLOYMENT_CHECKLIST.md`, `GOOGLE_CLOUD_DEPLOYMENT.md`, `PRODUCTION_DEPLOYMENT_GUIDE.md`, `VERCEL_DEPLOYMENT.md`, `SUPABASE_KEEPALIVE_SETUP.md`, `INSTRUCTIONS.md`, `deploy-vercel.md`, `PORTFOLIO_PROJECT_DESCRIPTION.md`, `repo_professionalism_prompt.md`.
+Keep at root: `README.md`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A && git commit -m "chore: remove cruft, archive legacy backend, declutter root"
 ```
 
 ---
