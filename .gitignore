@@ -592,3 +592,7 @@ pids/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Allow the example env template to be tracked (real .env files stay ignored above)
+!.env.example
+!**/.env.example
