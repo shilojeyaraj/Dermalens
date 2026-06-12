@@ -1,5 +1,11 @@
 # 🔬 Dermalens - AI-Powered Skincare Analysis Platform
 
+[![CI](https://github.com/shilojeyaraj/Dermalens/actions/workflows/ci.yml/badge.svg)](https://github.com/shilojeyaraj/Dermalens/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/shilojeyaraj/Dermalens/actions/workflows/codeql.yml/badge.svg)](https://github.com/shilojeyaraj/Dermalens/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/shilojeyaraj/Dermalens/branch/main/graph/badge.svg)](https://codecov.io/gh/shilojeyaraj/Dermalens)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933.svg)](https://nodejs.org)
+
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
 [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-1.5%20Pro-orange.svg)](https://ai.google.dev)
@@ -43,64 +49,50 @@ Dermalens is a comprehensive skincare analysis platform that combines computer v
 
 ## 📚 **Documentation**
 
-All documentation has been organized into a comprehensive structure:
-
-- **[📋 Documentation Index](docs/INDEX.md)** - Complete documentation guide
-- **[🚀 Quick Start](docs/setup/QUICK_REFERENCE.md)** - Get started quickly
-- **[🏗️ Setup Guide](docs/api/guides/SETUP_GUIDE.md)** - Complete setup instructions
-- **[📊 System Status](docs/status/SYSTEM_STATUS_COMPLETE.md)** - Current project status
+- **[🏗️ Architecture](docs/ARCHITECTURE.md)** - System overview, components, and data flow
+- **[📡 API Reference](docs/API.md)** - Backend endpoints (live Swagger at `/docs`)
+- **[🤝 Contributing](CONTRIBUTING.md)** - Workflow, conventions, and how to run checks
+- **[🔐 Security Policy](SECURITY.md)** - How to report a vulnerability
+- **[📋 Documentation Index](docs/INDEX.md)** - Full documentation guide
 
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**
+- Node.js 20+
 - Python 3.11+
-- Node.js 18+
-- Docker (for Elasticsearch)
-- Google Cloud Account
-- Supabase Account
+- Docker (for Elasticsearch, optional)
+- Google Cloud + Supabase accounts (for AI/auth features)
 
 ### **1. Clone Repository**
 ```bash
-git clone https://github.com/yourusername/dermalens.git
-cd dermalens
+git clone https://github.com/shilojeyaraj/Dermalens.git
+cd Dermalens
 ```
 
-### **2. Backend Setup**
+### **2. Configure environment**
 ```bash
-cd backend
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up environment
-python setup_gemini_env.py
-
-# Start Elasticsearch
-docker run -d -p 9200:9200 elasticsearch:8.11.0
-
-# Seed sample data
-python seed_elasticsearch_data.py
-
-# Start backend
-python main.py
+cp .env.example .env
+# Edit .env and fill in your own keys (never commit it)
 ```
 
-### **3. Frontend Setup**
+### **3. Frontend (Next.js — repo root)**
 ```bash
-cd frontend
-
-# Install dependencies
 npm install
-
-# Set up environment
-cp .env.example .env.local
-# Edit .env.local with your keys
-
-# Start frontend
-npm run dev
+npm run dev          # http://localhost:3000
 ```
 
-### **4. Access Application**
+### **4. Backend (FastAPI — apps/api)**
+```bash
+pip install -r apps/api/requirements.txt -r requirements-dev.txt
+cd apps/api
+uvicorn main:app --reload    # http://localhost:8000  (docs at /docs)
+
+# Optional: local Elasticsearch + seed data
+docker run -d -p 9200:9200 elasticsearch:8.11.0
+python seed_elasticsearch_data.py
+```
+
+### **5. Access Application**
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
@@ -203,48 +195,34 @@ Content-Type: application/json
 
 ## 🧪 **Testing**
 
-### **Run All Tests**
 ```bash
-# Backend tests
-cd backend
-python test_gemini_integration.py
-python -m pytest tests/
-
-# Frontend tests
-cd frontend
+# Frontend (Jest + React Testing Library)
 npm test
+npm run test:coverage
+
+# Backend (pytest)
+pytest apps/api/tests
+pytest apps/api/tests --cov=apps/api
+
+# Everything via Make (requires GNU Make; use WSL/Git Bash on Windows)
+make test
+make test-coverage
 ```
 
-### **Test Individual Components**
-```bash
-# Test Gemini integration
-python backend/test_gemini_integration.py
-
-# Test Elasticsearch
-python backend/seed_elasticsearch_data.py
-
-# Test API endpoints
-curl http://localhost:8000/health
-curl http://localhost:8000/api/services-status
-```
+Tests run automatically in CI on every push and pull request to `main`.
 
 ## 🚀 **Deployment**
 
-### **Google Cloud Run**
+### **Backend → Google Cloud Run** (via Cloud Build)
 ```bash
-# Deploy backend
-gcloud run deploy dermalens-backend \
-  --source backend/ \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated
+# Builds apps/api per cloudbuild.yaml and deploys to Cloud Run
+gcloud builds submit --config cloudbuild.yaml
+```
 
-# Deploy frontend
-gcloud run deploy dermalens-frontend \
-  --source frontend/ \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated
+### **Frontend → Vercel**
+```bash
+# The repo root is a Next.js app; Vercel builds it with `npm run build`.
+vercel --prod
 ```
 
 ### **Docker Compose**
@@ -293,28 +271,30 @@ docker-compose down
 
 ### **Project Structure**
 ```
-dermalens/
-├── backend/                 # FastAPI backend
-│   ├── main.py             # Main application
-│   ├── gemini_analysis_service.py  # AI service
-│   ├── elasticsearch_service.py    # Search service
-│   ├── fivetran_connector.py       # Data pipeline
-│   └── tests/              # Backend tests
-├── frontend/               # Next.js frontend
-│   ├── app/                # App router pages
-│   ├── components/         # React components
-│   ├── contexts/           # React contexts
-│   └── lib/                # Utilities
-├── docs/                   # Documentation
-└── docker-compose.yml      # Development setup
+Dermalens/
+├── app/                     # Next.js App Router pages (frontend, deployed to Vercel)
+├── components/              # React components (+ components/ui from shadcn/ui)
+├── lib/                     # Shared frontend utilities
+├── contexts/               # React context providers
+├── tests/                  # Frontend tests (unit / integration / e2e)
+├── apps/api/               # FastAPI backend (deployed to Cloud Run)
+│   ├── main.py             # API routes
+│   ├── ai/                 # Gemini / Vertex AI analysis services
+│   ├── infrastructure/     # Elasticsearch, search, caching, validation
+│   ├── core/               # Authentication
+│   ├── database/           # Supabase/Postgres access
+│   └── tests/              # Backend tests (unit / integration)
+├── docs/                   # Documentation (ARCHITECTURE.md, API.md, archive/)
+├── .github/workflows/      # CI, CodeQL, dependency review, release
+├── Makefile                # install / run / test / lint / format / docker targets
+└── docker-compose.yml      # Local multi-service setup
 ```
 
 ### **Contributing**
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the branching strategy, Conventional
+Commits, and how to run linters/tests. In short: branch off `main`, add tests,
+make `make lint` and `make test` pass, then open a PR.
 
 ## 📄 **License**
 
@@ -331,8 +311,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 **Support**
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/dermalens/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/dermalens/discussions)
+- **Issues**: [GitHub Issues](https://github.com/shilojeyaraj/Dermalens/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/shilojeyaraj/Dermalens/discussions)
 
 ---
 
