@@ -1,6 +1,6 @@
 """Shared pytest fixtures for the apps/api backend test suite."""
-import pytest
 
+import pytest
 from infrastructure.validation_service import SkincareValidationService
 
 

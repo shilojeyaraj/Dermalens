@@ -61,6 +61,4 @@ class TestValidateSkincareRoutine:
 
         result = validator.validate_skincare_routine(routine, _dry_skin_profile())
 
-        assert not any(
-            "should include sunscreen" in w.lower() for w in result["warnings"]
-        )
+        assert not any("should include sunscreen" in w.lower() for w in result["warnings"])
