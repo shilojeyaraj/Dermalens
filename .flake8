@@ -1,0 +1,20 @@
+[flake8]
+max-line-length = 100
+# E203 & W503 conflict with Black's formatting; E501 is delegated to Black
+# (it wraps code lines; long URLs/strings are left intentionally).
+# E402: several modules intentionally run warnings.filterwarnings / sys.path
+# setup before their imports, so module-level imports are not all at the top.
+extend-ignore = E203, W503, E501, E402
+exclude =
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    node_modules,
+    .next,
+    build,
+    dist,
+    docs/archive
+# Package __init__ files legitimately re-export names without using them.
+per-file-ignores =
+    __init__.py: F401

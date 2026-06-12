@@ -1,26 +1,24 @@
 """
 Test script for the Dermalens API
 """
-import requests
-import time
+
+import os
 import subprocess
 import sys
-import os
+import time
+
+import requests
+
 
 def test_api():
     """Test the API endpoints"""
     base_url = "http://localhost:8000"
-    
+
     print("🧪 Testing Dermalens API...")
-    
+
     # Test endpoints
-    endpoints = [
-        "/",
-        "/health", 
-        "/test",
-        "/config"
-    ]
-    
+    endpoints = ["/", "/health", "/test", "/config"]
+
     for endpoint in endpoints:
         try:
             response = requests.get(f"{base_url}{endpoint}", timeout=5)
@@ -32,8 +30,9 @@ def test_api():
             print(f"❌ {endpoint}: Connection failed - API not running")
         except Exception as e:
             print(f"❌ {endpoint}: Error - {e}")
-    
+
     print("\n📊 Test complete!")
+
 
 if __name__ == "__main__":
     test_api()

@@ -1,11 +1,13 @@
 """
 Minimal FastAPI application for deployment
 """
+
+import os
+
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import uvicorn
-import os
 
 app = FastAPI(title="Dermalens API", version="1.0.0")
 
@@ -18,13 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 async def root():
     return {"message": "Dermalens API is running!", "status": "healthy"}
 
+
 @app.get("/health")
 async def health():
     return {"status": "healthy", "message": "API is running"}
+
 
 @app.get("/api/status")
 async def status():
@@ -32,8 +37,9 @@ async def status():
         "service": "Dermalens API",
         "version": "1.0.0",
         "status": "operational",
-        "environment": os.getenv("ENVIRONMENT", "production")
+        "environment": os.getenv("ENVIRONMENT", "production"),
     }
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))

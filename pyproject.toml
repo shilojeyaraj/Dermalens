@@ -1,0 +1,47 @@
+# Python tooling configuration for the Dermalens backend (apps/api).
+# Runtime deps: apps/api/requirements.txt   |   Dev/test deps: requirements-dev.txt
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+# Never reformat the archived legacy backend or virtualenvs.
+extend-exclude = '''
+/(
+  | docs/archive
+  | venv
+  | \.venv
+  | node_modules
+  | \.next
+)/
+'''
+
+[tool.isort]
+profile = "black"          # keep isort and black in agreement on formatting
+line_length = 100
+skip_glob = ["docs/archive/*", "venv/*", ".venv/*", "node_modules/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests"]
+# apps/api is the import root in the deployed container (its Dockerfile builds
+# ./apps/api as context), so add it to sys.path for tests to import flat modules.
+pythonpath = ["apps/api"]
+asyncio_mode = "auto"
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["apps/api"]
+omit = ["*/tests/*", "*/__pycache__/*", "apps/api/debug_main.py", "apps/api/simple_*.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.:",
+  "raise NotImplementedError",
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true   # third-party stubs (google-cloud, supabase) are incomplete
+warn_unused_ignores = false
+exclude = "(docs/archive|venv|\\.venv|node_modules)"

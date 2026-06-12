@@ -1,44 +1,50 @@
 ﻿"""
 Database operations and models for Supabase integration
 """
-from supabase import create_client, Client
-from typing import Dict, List, Optional, Any
-from datetime import datetime
-import uuid
-import sys
+
 import os
+import sys
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 # Import configuration
 from config import (
-    SUPABASE_URL, 
-    SUPABASE_SERVICE_KEY, 
-    PROFILES_TABLE, 
-    USER_IMAGES_TABLE, 
-    USER_SKIN_PROFILES_TABLE
+    PROFILES_TABLE,
+    SUPABASE_SERVICE_KEY,
+    SUPABASE_URL,
+    USER_IMAGES_TABLE,
+    USER_SKIN_PROFILES_TABLE,
 )
+from supabase import Client, create_client
+
 
 class DatabaseManager:
     """Manages all database operations with Supabase"""
-    
+
     def __init__(self):
         print(f"[DATABASE] Initializing DatabaseManager...")
         print(f"[DATABASE] Supabase URL: {SUPABASE_URL}")
         print(f"[DATABASE] Service Key: {SUPABASE_SERVICE_KEY[:20]}...")
-        print(f"[DATABASE] Tables: {PROFILES_TABLE}, {USER_IMAGES_TABLE}, {USER_SKIN_PROFILES_TABLE}")
-        
+        print(
+            f"[DATABASE] Tables: {PROFILES_TABLE}, {USER_IMAGES_TABLE}, {USER_SKIN_PROFILES_TABLE}"
+        )
+
         try:
             # Configure client with options for Cloud Run
             supabase_options = {
                 "auto_refresh_token": False,
                 "persist_session": False,
             }
-            
-            self.supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY, options=supabase_options)
+
+            self.supabase: Client = create_client(
+                SUPABASE_URL, SUPABASE_SERVICE_KEY, options=supabase_options
+            )
             print(f"[DATABASE] Supabase client created successfully")
-            
+
             # Test connection
             try:
-                test_result = self.supabase.table(PROFILES_TABLE).select('id').limit(1).execute()
+                test_result = self.supabase.table(PROFILES_TABLE).select("id").limit(1).execute()
                 print(f"[DATABASE] Connection test successful")
             except Exception as conn_error:
                 print(f"[DATABASE] WARNING: Connection test failed: {str(conn_error)}")
@@ -48,9 +54,17 @@ class DatabaseManager:
             print(f"[DATABASE] ERROR: Failed to create Supabase client: {str(e)}")
             print(f"[DATABASE] Error type: {type(e).__name__}")
             raise
-    
+
     # Profile Operations
-    async def create_profile(self, user_id: str, email: str, username: str = None, profile_picture: str = None, first_name: str = None, last_name: str = None) -> Dict:
+    async def create_profile(
+        self,
+        user_id: str,
+        email: str,
+        username: str = None,
+        profile_picture: str = None,
+        first_name: str = None,
+        last_name: str = None,
+    ) -> Dict:
         """Create a new user profile or update existing one"""
         print(f" [DATABASE] Creating/updating profile for user_id: {user_id}")
         print(f" [DATABASE] Email: {email}")
@@ -58,7 +72,7 @@ class DatabaseManager:
         print(f" [DATABASE] First Name: {first_name}")
         print(f" [DATABASE] Last Name: {last_name}")
         print(f" [DATABASE] Table: {PROFILES_TABLE}")
-        
+
         try:
             # First, check if profile already exists
             existing_profile = await self.get_profile(user_id)
@@ -71,16 +85,21 @@ class DatabaseManager:
                     "first_name": first_name,
                     "last_name": last_name,
                     "profile_picture": profile_picture,
-                    "updated_at": datetime.now().isoformat()
+                    "updated_at": datetime.now().isoformat(),
                 }
-                
+
                 print(f" [DATABASE] Profile data to update: {profile_data}")
-                
-                result = self.supabase.table(PROFILES_TABLE).update(profile_data).eq("id", user_id).execute()
-                
+
+                result = (
+                    self.supabase.table(PROFILES_TABLE)
+                    .update(profile_data)
+                    .eq("id", user_id)
+                    .execute()
+                )
+
                 print(f" [DATABASE] Update result: {result}")
                 print(f" [DATABASE] Profile updated successfully")
-                
+
                 return {"success": True, "data": result.data[0] if result.data else None}
             else:
                 print(f" [DATABASE] Profile doesn't exist, creating new one...")
@@ -93,23 +112,23 @@ class DatabaseManager:
                     "last_name": last_name,
                     "profile_picture": profile_picture,
                     "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat()
+                    "updated_at": datetime.now().isoformat(),
                 }
-                
+
                 print(f" [DATABASE] Profile data to insert: {profile_data}")
-                
+
                 result = self.supabase.table(PROFILES_TABLE).insert(profile_data).execute()
-                
+
                 print(f" [DATABASE] Insert result: {result}")
                 print(f" [DATABASE] Profile created successfully")
-                
+
                 return {"success": True, "data": result.data[0] if result.data else None}
-                
+
         except Exception as e:
             print(f" [DATABASE] Profile creation/update failed: {str(e)}")
             print(f" [DATABASE] Error type: {type(e).__name__}")
             return {"success": False, "error": str(e)}
-    
+
     async def get_profile(self, user_id: str) -> Dict:
         """Get user profile by ID"""
         try:
@@ -117,7 +136,7 @@ class DatabaseManager:
             return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def update_profile(self, user_id: str, updates: Dict) -> Dict:
         """Update user profile"""
         try:
@@ -126,7 +145,7 @@ class DatabaseManager:
             return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     # User Skin Profile Operations
     async def create_skin_profile(self, user_id: str, skin_data: Dict) -> Dict:
         """Create user skin profile"""
@@ -149,55 +168,75 @@ class DatabaseManager:
                 "routine_type": skin_data.get("routine_type"),
                 "skin_goals": skin_data.get("skin_goals", []),
                 "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now().isoformat(),
             }
-            
-            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).insert(skin_profile_data).execute()
+
+            result = (
+                self.supabase.table(USER_SKIN_PROFILES_TABLE).insert(skin_profile_data).execute()
+            )
             return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def get_skin_profile(self, user_id: str) -> Dict:
         """Get user skin profile by user ID"""
         try:
-            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).select("*").eq("user_id", user_id).execute()
+            result = (
+                self.supabase.table(USER_SKIN_PROFILES_TABLE)
+                .select("*")
+                .eq("user_id", user_id)
+                .execute()
+            )
             return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def update_skin_profile(self, user_id: str, updates: Dict) -> Dict:
         """Update user skin profile"""
         try:
             updates["updated_at"] = datetime.now().isoformat()
-            result = self.supabase.table(USER_SKIN_PROFILES_TABLE).update(updates).eq("user_id", user_id).execute()
+            result = (
+                self.supabase.table(USER_SKIN_PROFILES_TABLE)
+                .update(updates)
+                .eq("user_id", user_id)
+                .execute()
+            )
             return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     # User Images Operations
-    async def save_user_image(self, user_id: str, storage_path: str, bucket: str = "user-images") -> Dict:
+    async def save_user_image(
+        self, user_id: str, storage_path: str, bucket: str = "user-images"
+    ) -> Dict:
         """Save user image metadata to database"""
         try:
             image_data = {
                 "user_id": user_id,
                 "storage_path": storage_path,
                 "bucket": bucket,
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
             }
-            
+
             result = self.supabase.table(USER_IMAGES_TABLE).insert(image_data).execute()
             return {"success": True, "data": result.data[0] if result.data else None}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def get_user_images(self, user_id: str) -> Dict:
         """Get all images for a user"""
         try:
-            result = self.supabase.table(USER_IMAGES_TABLE).select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+            result = (
+                self.supabase.table(USER_IMAGES_TABLE)
+                .select("*")
+                .eq("user_id", user_id)
+                .order("created_at", desc=True)
+                .execute()
+            )
             return {"success": True, "data": result.data if result.data else []}
         except Exception as e:
             return {"success": False, "error": str(e)}
-    
+
     async def delete_user_image(self, image_id: str) -> Dict:
         """Delete user image"""
         try:
@@ -206,21 +245,26 @@ class DatabaseManager:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+
 # Create global database manager instance
 db_manager = DatabaseManager()
 
+from typing import List, Optional
+
 # Pydantic models for request/response validation
 from pydantic import BaseModel, Field
-from typing import List, Optional
+
 
 class UserProfileCreate(BaseModel):
     email: str
     username: Optional[str] = None
     profile_picture: Optional[str] = None
 
+
 class UserProfileUpdate(BaseModel):
     username: Optional[str] = None
     profile_picture: Optional[str] = None
+
 
 class SkinProfileCreate(BaseModel):
     skin_type: Optional[str] = None
@@ -239,6 +283,7 @@ class SkinProfileCreate(BaseModel):
     routine_type: Optional[str] = None
     skin_goals: List[str] = []
 
+
 class SkinProfileUpdate(BaseModel):
     skin_type: Optional[str] = None
     skin_tone: Optional[str] = None
@@ -256,7 +301,7 @@ class SkinProfileUpdate(BaseModel):
     routine_type: Optional[str] = None
     skin_goals: Optional[List[str]] = None
 
+
 class UserImageCreate(BaseModel):
     storage_path: str
     bucket: str = "user-images"
-
