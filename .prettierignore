@@ -1,0 +1,22 @@
+# Build output & dependencies
+.next/
+out/
+node_modules/
+coverage/
+
+# Python (formatted by Black, not Prettier)
+apps/api/
+venv/
+.venv/
+
+# Archived / generated
+docs/archive/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Lockfiles & binaries
+package-lock.json
+*.png
+*.jpg
+*.jpeg
+*.msi

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/eslintrc",
+  "extends": ["next/core-web-vitals", "prettier"],
+  "rules": {
+    // Prose copy in this app legitimately uses apostrophes/quotes in JSX text.
+    "react/no-unescaped-entities": "off",
+    // We intentionally use <img> in a few camera/upload flows; warn, don't fail CI.
+    "@next/next/no-img-element": "warn"
+  },
+  "ignorePatterns": ["apps/api/", "docs/archive/", ".next/", "coverage/", "node_modules/"]
+}

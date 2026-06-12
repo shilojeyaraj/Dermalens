@@ -48,18 +48,6 @@ export default function SettingsPage() {
     routinePreference: ""
   })
 
-  // Handle case where user context is not available
-  if (!userContext) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Loading...</h1>
-          <p className="text-gray-600">Please wait while we load your profile.</p>
-        </div>
-      </div>
-    )
-  }
-
   // Load user data and skin profile on mount
   useEffect(() => {
     const loadProfileData = async () => {
@@ -207,6 +195,20 @@ export default function SettingsPage() {
 
   const handleGoHome = () => {
     router.push("/dashboard")
+  }
+
+  // Guard: user context not yet available.
+  // Must come AFTER all hooks so hooks are called unconditionally on every render
+  // (React rules-of-hooks). The useEffect above already no-ops when `user` is falsy.
+  if (!userContext) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Loading...</h1>
+          <p className="text-gray-600">Please wait while we load your profile.</p>
+        </div>
+      </div>
+    )
   }
 
   if (!user) {
