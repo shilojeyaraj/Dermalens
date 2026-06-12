@@ -1,14 +1,35 @@
+# Dependencies & build output
 node_modules
 .next
+out
+coverage
+
+# Git & editor
 .git
 .gitignore
-README.md
+.vscode
+.idea
+
+# Env & secrets (never bake into an image)
 .env
-.env.local
-.env.production.local
-.env.development.local
+.env.*
+!.env.example
+
+# Not needed for the frontend image
+apps
+docs
+tests
+venv
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+
+# Logs & misc
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .DS_Store
 *.tsbuildinfo
+*.msi

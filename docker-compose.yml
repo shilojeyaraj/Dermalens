@@ -1,7 +1,10 @@
-version: '3.8'
+# Local development stack: frontend + backend + their common dependencies.
+# Copy .env.example to .env first; values below are safe local defaults.
+#
+#   docker compose up --build
 
 services:
-  # Elasticsearch for product search
+  # Elasticsearch — product search index
   elasticsearch:
     image: elasticsearch:8.11.0
     container_name: dermalens-elasticsearch
@@ -11,7 +14,6 @@ services:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
       - "9200:9200"
-      - "9300:9300"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
@@ -22,7 +24,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # Redis for caching and background tasks
+  # Redis — caching (stub)
   redis:
     image: redis:7-alpine
     container_name: dermalens-redis
@@ -38,19 +40,18 @@ services:
       timeout: 10s
       retries: 5
 
-  # PostgreSQL database (alternative to Supabase for local development)
+  # PostgreSQL — local alternative to Supabase (stub)
   postgres:
     image: postgres:15-alpine
     container_name: dermalens-postgres
     environment:
       POSTGRES_DB: dermalens
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/setup_database.sql:/docker-entrypoint-initdb.d/setup_database.sql
     networks:
       - dermalens-network
     healthcheck:
@@ -59,23 +60,20 @@ services:
       timeout: 10s
       retries: 5
 
-  # Backend API
+  # Backend API (FastAPI — apps/api, the deployed service)
   backend:
     build:
-      context: ./backend
+      context: ./apps/api
       dockerfile: Dockerfile
     container_name: dermalens-backend
+    env_file:
+      - .env
     environment:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/dermalens
       - DEBUG=true
-      - LOG_LEVEL=INFO
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
-      - /app/venv
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -85,96 +83,21 @@ services:
         condition: service_healthy
     networks:
       - dermalens-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
-  # Frontend
+  # Frontend (Next.js — repo root)
   frontend:
     build:
-      context: ./frontend
+      context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
     container_name: dermalens-frontend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NODE_ENV=development
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - dermalens-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Nginx reverse proxy (optional)
-  nginx:
-    image: nginx:alpine
-    container_name: dermalens-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - frontend
       - backend
-    networks:
-      - dermalens-network
-
-  # Data seeding service
-  seed-data:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: dermalens-seed-data
-    environment:
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/dermalens
-    volumes:
-      - ./backend:/app
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    networks:
-      - dermalens-network
-    command: python seed_elasticsearch_data.py
-    restart: "no"
-
-  # Monitoring with Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: dermalens-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    networks:
-      - dermalens-network
-
-  # Grafana for monitoring dashboards
-  grafana:
-    image: grafana/grafana:latest
-    container_name: dermalens-grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - grafana_data:/var/lib/grafana
     networks:
       - dermalens-network
 
@@ -184,10 +107,6 @@ volumes:
   redis_data:
     driver: local
   postgres_data:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
     driver: local
 
 networks:
