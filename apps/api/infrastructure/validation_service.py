@@ -141,17 +141,18 @@ class SkincareValidationService:
                 validation["warnings"].append("Morning routine should include sunscreen")
                 validation["recommendations"].append("Add SPF 30+ sunscreen as the last step")
 
-        # Check for proper order
-        validation.update(self._validate_step_order(steps, routine_type))
-
-        # Check for ingredient conflicts
-        validation.update(self._validate_ingredient_conflicts(steps, user_profile))
-
-        # Check for skin type compatibility
-        validation.update(self._validate_skin_type_compatibility(steps, user_profile))
-
-        # Check for condition targeting
-        validation.update(self._validate_condition_targeting(steps, user_profile))
+        # Merge results from each sub-validator. Each returns its own
+        # warnings/errors/recommendations lists, so we EXTEND (not dict.update,
+        # which would overwrite and silently drop the checks accumulated above).
+        sub_validations = (
+            self._validate_step_order(steps, routine_type),
+            self._validate_ingredient_conflicts(steps, user_profile),
+            self._validate_skin_type_compatibility(steps, user_profile),
+            self._validate_condition_targeting(steps, user_profile),
+        )
+        for sub in sub_validations:
+            for key in ("warnings", "errors", "recommendations"):
+                validation[key].extend(sub.get(key, []))
 
         return validation
 
