@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }} # optional; required for private repos
+          fail_ci_if_error: false # don't fail the build if Codecov is unavailable
+
+  backend:
+    name: Backend (lint + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dev/test tooling
+        # Runtime deps live in apps/api/requirements.txt and are exercised by the
+        # Docker build/deploy. The unit suite only needs the dev tooling.
+        run: pip install -r requirements-dev.txt
+
+      - name: Format check (Black)
+        run: black --check apps/api
+
+      - name: Import order check (isort)
+        run: isort --check-only apps/api
+
+      - name: Lint (flake8) — fail only on real errors
+        run: flake8 apps/api --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Lint (flake8) — full report (non-blocking)
+        run: flake8 apps/api --count --exit-zero --statistics
+
+      - name: Test with coverage
+        run: pytest apps/api/tests --cov=apps/api --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
