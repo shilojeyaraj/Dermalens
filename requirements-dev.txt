@@ -3,7 +3,7 @@
 #
 #   pip install -r apps/api/requirements.txt -r requirements-dev.txt
 
-pytest>=7.4.0
+pytest>=9.0.3
 pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
 black>=23.0.0
