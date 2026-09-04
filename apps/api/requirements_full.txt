@@ -1,21 +1,21 @@
 # Core FastAPI dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-python-jose[cryptography]==3.3.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
-python-dotenv==1.0.0
+python-dotenv==1.2.3
 
 # Database and authentication
-supabase==2.0.0
-psycopg2-binary==2.9.9
+supabase==2.31.0
+psycopg2-binary==2.9.12
 
 # AI and ML dependencies
 google-cloud-aiplatform==1.38.0
 google-cloud-storage==2.10.0
-google-cloud-secret-manager==2.16.4
-google-api-python-client==2.108.0
-google-generativeai==0.3.2
+google-cloud-secret-manager==2.30.0
+google-api-python-client==2.200.0
+google-generativeai==0.8.6
 
 # Image processing
 Pillow==10.1.0
@@ -25,18 +25,18 @@ pandas==2.1.4
 
 # Search and data
 elasticsearch==8.11.0
-requests==2.31.0
-httpx==0.25.2
+requests==2.34.2
+httpx==0.28.1
 
 # Async and utilities
 aiofiles==23.2.1
-pydantic==2.5.0
+pydantic==2.13.5
 asyncio-throttle==1.0.2
 
 # Monitoring and logging
 structlog==23.2.0
-prometheus-client==0.19.0
+prometheus-client==0.26.0
 
 # Additional utilities
-python-dateutil==2.8.2
+python-dateutil==2.9.0.post0
 pytz==2023.3
